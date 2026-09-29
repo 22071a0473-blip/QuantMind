@@ -71,6 +71,17 @@ class LiveMarketSources:
         sma50 = float(close.tail(50).mean())
         year_high = float(close.max())
         year_low = float(close.min())
+        news = [
+            NewsItem(
+                title=str(item.get("title", "Untitled")),
+                publisher=str(item.get("publisher", "Unknown")),
+                url=str(item.get("link", "")),
+                published=str(item.get("providerPublishTime", "")),
+                summary=str(item.get("summary", "")),
+            )
+            for item in ticker.news[:12]
+            if item.get("link")
+        ]
         features = MarketFeatures(
             return_1d=snapshot.change_pct,
             return_5d=float((close.iloc[-1] / close.iloc[-6] - 1) * 100) if len(close) > 5 else snapshot.change_pct,
@@ -85,17 +96,6 @@ class LiveMarketSources:
             high_low_position=float((latest_price - year_low) / max(year_high - year_low, 0.0001) * 100),
             news_count=float(len(news)),
         )
-        news = [
-            NewsItem(
-                title=str(item.get("title", "Untitled")),
-                publisher=str(item.get("publisher", "Unknown")),
-                url=str(item.get("link", "")),
-                published=str(item.get("providerPublishTime", "")),
-                summary=str(item.get("summary", "")),
-            )
-            for item in ticker.news[:12]
-            if item.get("link")
-        ]
         evidence = [
             Evidence(
                 source="Yahoo Finance price history",
