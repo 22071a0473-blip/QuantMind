@@ -37,6 +37,10 @@
   <div class="toggle"><a href="/research?asset={{ report.asset }}&memory=true" class="button active">With Memory ✅</a><a href="/research?asset={{ report.asset }}&memory=false" class="button">Without Memory</a><span class="muted">Compare the same live evidence with and without Hindsight recall.</span></div>
   <p class="muted">This report used {{ report.memory_used.recalled_count }} recalled patterns and {{ report.memory_used.total_count }} total memories for this ticker.</p>
   {% if report.memory_impact %}<div class="card"><b>Memory Impact:</b> {{ report.memory_impact }}</div>{% endif %}
+  <div class="card"><b>Demo comparison:</b> With Memory recalls {{ report.memory_used.recalled_count }} precedent(s); use
+    <a href="/research?asset={{ report.asset }}&memory=false">Without Memory</a> to show the controlled baseline.
+    {% if report.memory_used.recalled_count == 0 %}<br><span class="muted">Demo seed preview is enabled while Hindsight Cloud finishes indexing retained memories.</span>{% endif %}
+  </div>
   {% if report.warning %}<div class="error">{{ report.warning }}</div>{% endif %}
   <section class="hero">
     <div class="card span-4"><div class="tag">Live snapshot</div><div class="metric">{{ report.snapshot.asset }}</div><div>${{ "%.4f"|format(report.snapshot.price) }} · {{ "%.2f"|format(report.snapshot.change_pct) }}%</div><p class="muted">{{ report.snapshot.kind }} · {{ report.snapshot.history_days }} history days · {{ report.confidence_meter.regime }}</p></div>

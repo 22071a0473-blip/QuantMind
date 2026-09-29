@@ -50,3 +50,10 @@ def test_precedent_extracts_seeded_thesis_outcome() -> None:
     precedent = summarize_precedent("PLTR", [record])
     assert precedent.moves[0].reason == "DoD AI TITAN Contract Win"
     assert precedent.moves[0].outcome == "+18% over 30 days"
+
+
+def test_demo_seed_preview_provides_pltr_precedents() -> None:
+    records = HindsightMemory._demo_records("PLTR")
+    precedent = summarize_precedent("PLTR", records)
+    assert precedent.count == 2
+    assert precedent.moves[0].outcome == "+18% over 30 days"

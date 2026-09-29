@@ -222,6 +222,24 @@ class QuantMindEngine:
             bear_case="insufficient evidence",
             kill_conditions=[],
         )
+        demo_asset = live.snapshot.asset.upper().replace("CRYPTO:", "")
+        demo_company = {
+            "PLTR": "Palantir Technologies: defense AI contracts and commercial AIP adoption.",
+            "ONDO": "Ondo Finance: tokenized Treasury infrastructure and RWA distribution.",
+        }.get(demo_asset, f"{live.snapshot.asset}: live price and catalyst evidence.")
+        demo_sector = {
+            "PLTR": "Defense AI and enterprise software.",
+            "ONDO": "Real-world assets and tokenized fixed income.",
+        }.get(demo_asset, "The relevant asset and macro market segment.")
+        demo_macro = {
+            "PLTR": "Defense budget expansion and enterprise AI rotation.",
+            "ONDO": "Institutional adoption of tokenized Treasuries and real-world assets.",
+        }.get(demo_asset, "Institutional liquidity, rates, and risk appetite.")
+        demo_market_narrative = (
+            f"Demo evidence links {live.snapshot.asset} to {demo_sector.lower()} and the current catalyst tape."
+            if Settings.from_env().demo_mode
+            else "insufficient evidence"
+        )
         vector_groups = {vector.value: int(audit.vector_scores[vector]) for vector in audit.vector_scores}
         return Report(
             asset=live.snapshot.asset,
@@ -229,9 +247,9 @@ class QuantMindEngine:
             snapshot=live.snapshot,
             factor_1_why_it_moved=[driver],
             factor_2_deep_research=DeepResearch(
-                company="insufficient evidence",
-                sector="insufficient evidence",
-                macro="insufficient evidence",
+                company=demo_company if Settings.from_env().demo_mode else "insufficient evidence",
+                sector=demo_sector if Settings.from_env().demo_mode else "insufficient evidence",
+                macro=demo_macro if Settings.from_env().demo_mode else "insufficient evidence",
                 news=f"{len(live.news)} live news items analyzed.",
             ),
             confidence_meter=ConfidenceReport(
@@ -247,8 +265,12 @@ class QuantMindEngine:
             historical_precedent=precedent,
             factor_5_facts_vs_reality=FactsVsReality(
                 reported_facts="Live provider evidence.",
-                market_narrative="insufficient evidence",
-                gap="insufficient evidence",
+                market_narrative=demo_market_narrative,
+                gap=(
+                    "Synthetic demo evidence is clearly labeled; verify catalysts against primary filings."
+                    if Settings.from_env().demo_mode
+                    else "insufficient evidence"
+                ),
                 evidence=source,
             ),
             extended_analysis=ExtendedAnalysis(leadership=leadership, roadmap=roadmap),
@@ -259,4 +281,10 @@ class QuantMindEngine:
                 patterns=recalled.texts,
             ),
             live_news=live.news,
+            memory_impact=(
+                "Memory disabled: this is the baseline report. Factor 4 is intentionally empty and "
+                "the confidence score carries the deterministic memory-off penalty."
+                if not memory_enabled
+                else None
+            ),
         )
