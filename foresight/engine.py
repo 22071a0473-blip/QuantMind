@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from .analytics import AnalyticsResult, InstitutionalAnalytics
+from .confidence_engine import ConfidenceAudit, ConfidenceEngine
 from .llm import GroqResearcher
 from .memory import HindsightMemory, RecalledMemory, summarize_precedent
 from .models import (
@@ -25,7 +26,7 @@ from .sources import LiveMarketSources, LiveResearchData
 @dataclass(slots=True)
 class ResearchResult:
     report: Report
-    analytics: AnalyticsResult
+    audit: ConfidenceAudit
 
 
 class QuantMindEngine:
@@ -33,6 +34,7 @@ class QuantMindEngine:
         self._memory = memory
         self._researcher = researcher
         self._sources = LiveMarketSources()
+        self._confidence_engine = ConfidenceEngine()
 
     @property
     def sources(self) -> LiveMarketSources:
@@ -69,19 +71,43 @@ class QuantMindEngine:
             else f"{live.snapshot.asset} price volume movement catalyst"
         )
         recalled = (
-            await self._memory.recall(
-                live.snapshot.asset,
-                query_keywords,
-            )
+            await self._memory.recall(live.snapshot.asset, query_keywords)
             if memory_enabled
-            else RecalledMemory(bank_id=self._memory.bank_id(live.snapshot.asset), records=[], total_count=0)
+            else RecalledMemory(
+                bank_id=self._memory.bank_id(live.snapshot.asset),
+                records=[],
+                total_count=0,
+            )
         )
         precedent = summarize_precedent(live.snapshot.asset, recalled.records, recalled.meta_insight)
-        analytics = InstitutionalAnalytics(
-            features=live.features,
-            memory_count=precedent.count if memory_enabled else 0,
-        ).calculate()
-        deterministic = self._deterministic_report(live, recalled, precedent, analytics, memory_enabled)
+
+        features = live.features
+        observations = {
+            "price_change_1d": features.return_1d,
+            "price_change_5d": features.return_5d,
+            "price_change_20d": features.return_20d,
+            "volume_ratio": features.volume_ratio,
+            "liquidity": features.volume_ratio,
+            "volatility": features.volatility_20d,
+            "drawdown": features.drawdown_1y,
+            "momentum": features.momentum_20d,
+            "trend_slope": features.trend_slope,
+            "sma20_distance": features.price_vs_sma20,
+            "sma50_distance": features.price_vs_sma50,
+            "high_low_position": features.high_low_position,
+            "news_count": features.news_count,
+            "news_recency": 100.0 if features.news_count else None,
+            "event_clarity": 100.0 if features.news_count else 0.0,
+            "memory_precedent": min(100.0, precedent.count * 25) if memory_enabled and precedent.count else 0.0,
+            "catalyst": 100.0 if live.news else 0.0,
+        }
+        audit = self._confidence_engine.evaluate(observations)
+
+        if not memory_enabled:
+            audit.score = max(0, int(audit.score * 0.75))
+            audit.explanation += " [Penalty applied: Hindsight Memory disabled]"
+
+        deterministic = self._deterministic_report(live, recalled, precedent, audit, memory_enabled)
         try:
             report = await self._researcher.synthesize(
                 live.snapshot.asset,
@@ -98,13 +124,15 @@ class QuantMindEngine:
         except Exception as exc:
             deterministic.warning = f"Groq synthesis unavailable: {exc}"
             report = deterministic
+
         report.historical_precedent = precedent
         report.confidence_meter = deterministic.confidence_meter
         if memory_enabled and precedent.count:
             report.memory_impact = (
-                f"Hindsight memory improved this report. Without it, Factor 4 would be empty and "
-                f"confidence would be {max(0, deterministic.confidence_meter.score - 12)} points lower."
+                "Hindsight memory improved this report. Without it, Factor 4 would be empty "
+                "and the deterministic confidence score would be significantly lower."
             )
+
         primary_reason = report.factor_1_why_it_moved[0].category if report.factor_1_why_it_moved else "Unclassified"
         total = await self._memory.retain(
             live.snapshot.asset,
@@ -113,6 +141,7 @@ class QuantMindEngine:
             primary_reason,
         )
         report.memory_used.total_count = total
+
         if total > 0 and total % 5 == 0:
             insight = await self._memory.reflect(
                 live.snapshot.asset,
@@ -120,23 +149,23 @@ class QuantMindEngine:
             )
             await self._memory.retain_insight(live.snapshot.asset, insight, total)
             report.historical_precedent.meta_insight = insight
-        return ResearchResult(report=report, analytics=analytics)
+
+        return ResearchResult(report=report, audit=audit)
 
     @staticmethod
     def _deterministic_report(
         live: LiveResearchData,
         recalled: RecalledMemory,
         precedent: HistoricalPrecedent,
-        analytics: AnalyticsResult,
+        audit: ConfidenceAudit,
         memory_enabled: bool,
     ) -> Report:
-        date = datetime.now(UTC).date().isoformat()
         source = live.evidence
         driver = Driver(
             category="Unclassified" if not live.news else "Market news and price/volume response",
             probability=0.2 if not live.news else 0.55,
             explanation=(
-                "No news source was returned; the move is unclassified and confidence is lower."
+                "No news source was returned; the move is unclassified."
                 if not live.news
                 else "Live news and the price/volume response are the available catalyst evidence."
             ),
@@ -148,17 +177,18 @@ class QuantMindEngine:
             execution_vs_promises="insufficient evidence",
             capital_allocation="insufficient evidence",
             governance_and_alignment="insufficient evidence",
-            evidence_gaps=["Leadership and board evidence requires verified filings in the supplied sources."],
+            evidence_gaps=["Leadership and board evidence requires verified filings."],
             evidence=source,
         )
         roadmap = SuccessRoadmap(
-            success_definition="insufficient evidence for a company-specific success definition",
+            success_definition="insufficient evidence",
             required_conditions=[],
             bull_case="insufficient evidence",
             base_case="insufficient evidence",
             bear_case="insufficient evidence",
             kill_conditions=[],
         )
+        vector_groups = {vector.value: int(audit.vector_scores[vector]) for vector in audit.vector_scores}
         return Report(
             asset=live.snapshot.asset,
             generated_at=datetime.now(UTC).isoformat(),
@@ -168,21 +198,21 @@ class QuantMindEngine:
                 company="insufficient evidence",
                 sector="insufficient evidence",
                 macro="insufficient evidence",
-                news="No news found." if not live.news else f"{len(live.news)} live news items returned.",
+                news=f"{len(live.news)} live news items analyzed.",
             ),
             confidence_meter=ConfidenceReport(
-                score=max(0, analytics.overall_score - (0 if memory_enabled else 12)),
-                signals_available=len(analytics.signals),
-                signals_total=len(analytics.signals),
-                coverage=1.0,
-                regime=analytics.regime,
-                groups=analytics.group_scores,
-                explanation=analytics.regime_explanation,
-                audit=analytics.audit_trail,
+                score=int(audit.score),
+                signals_available=audit.available,
+                signals_total=audit.total,
+                coverage=audit.coverage,
+                regime="Institutional",
+                groups=vector_groups,
+                explanation=audit.explanation,
+                audit=[f"{parameter.name}: {parameter.contribution:.1f}" for parameter in audit.parameters if parameter.available],
             ),
             historical_precedent=precedent,
             factor_5_facts_vs_reality=FactsVsReality(
-                reported_facts="Only the live provider evidence is treated as fact.",
+                reported_facts="Live provider evidence.",
                 market_narrative="insufficient evidence",
                 gap="insufficient evidence",
                 evidence=source,
