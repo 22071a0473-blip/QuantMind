@@ -135,7 +135,7 @@ future connectors.
 | Equities/ETFs | yfinance |
 | Crypto | CoinGecko via `CRYPTO:<coin-id>` |
 | Deterministic analysis | Python signal and confidence engines |
-| Deployment | Docker and Render Blueprint |
+| Runtime | Docker-compatible FastAPI service |
 
 The repository also contains typed boundaries for future macro, sector,
 filings, flows, news, and correlation providers. They report unavailable data
@@ -208,7 +208,7 @@ GET  /docs
 |---|---|
 | **Innovation — 30%** | A research workflow that turns repeated market events into inspectable precedents rather than a generic chat response. |
 | **Hindsight Memory — 25%** | Direct `recall`, `retain`, and `reflect` usage, asset-specific banks, historical precedent, and a visible memory comparison. |
-| **Technical Implementation — 20%** | FastAPI, typed models, live providers, deterministic 12-signal analytics, 50-parameter confidence audit, async state graph, and Docker deployment. |
+| **Technical Implementation — 20%** | FastAPI, typed models, live providers, deterministic 12-signal analytics, 50-parameter confidence audit, and an async state graph. |
 | **User Experience — 15%** | A focused terminal UI with five factors, source evidence, memory status, confidence coverage, and a working memory toggle. |
 | **Real-world Impact — 10%** | Reduces the time required to form a sourced first-pass market brief while keeping uncertainty visible. |
 
