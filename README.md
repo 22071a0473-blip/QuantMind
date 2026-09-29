@@ -1,81 +1,266 @@
-# QuantMind
+# QuantMind Terminal
 
-QuantMind produces a structured five-factor report for any ticker, backed by live
-market data and Hindsight memory. Every number in the report is traceable to a
-live provider or an explicitly labeled memory record; see `/api/signals/{ticker}`.
+> **Why did this asset move, and what does history say about the next move?**
 
-## Five factors
+QuantMind is a memory-backed market research terminal for stocks, ETFs, and
+crypto assets. It combines live market data, deterministic signal analysis,
+Groq narrative synthesis, and Vectorize Hindsight memory into a structured
+five-factor research memo.
 
-1. **Why it moved** — catalyst classification with source citations.
-2. **Deep research** — company, sector, macro, and news evidence.
-3. **Confidence meter** — deterministic score, coverage, regime, and signal audit.
-4. **Historical precedent** — dated similar moves recalled from the Hindsight bank.
-5. **Facts vs reality** — reported facts, market narrative, and evidence gaps.
+It is deliberately not a chatbot. The output is an auditable research artifact:
+the live snapshot and citations show what is known now, the deterministic
+confidence layer shows how the score was calculated, and Hindsight shows which
+past observations were recalled.
 
-Leadership and the success roadmap live below the factors in **Extended Analysis
-(experimental)**. They are hypotheses, not facts.
+## The problem
 
-## Memory in Action
+Understanding a large move usually requires stitching together price action,
+volume, news, sector context, macro conditions, company history, and previous
+market reactions. A stateless LLM may summarize today's headlines, but it does
+not automatically remember how a similar catalyst behaved in the same asset.
 
-1. Query `PLTR` and show the confidence meter and the empty first-observation precedent.
-2. Run five analyses on different trading dates; each report is retained in the PLTR Hindsight bank.
-3. Query PLTR again and show the dated precedent timeline, memory badge, and confidence lift.
+QuantMind compresses that workflow into a repeatable report while keeping
+evidence and uncertainty visible. It does not promise a price prediction and it
+does not replace investment advice.
 
-Use the `With Memory` / `Without Memory` toggle to demonstrate the control:
-without Hindsight, Factor 4 is empty and the precedent contribution is removed
-from confidence. Add the before/after screenshots to the hackathon submission.
+## What the report contains
+
+Every research run produces five consistent factors:
+
+1. **Why it moved** — a catalyst classification grounded in live news and
+   price/volume evidence.
+2. **Deep research** — company, sector, macro, and news context, with
+   insufficient evidence called out instead of invented.
+3. **Confidence meter** — a deterministic score, coverage percentage, regime,
+   vector groups, and signal audit.
+4. **Historical precedent** — similar prior reports recalled from the asset's
+   Hindsight memory bank.
+5. **Facts vs. reality** — reported evidence, current narrative, and the gap
+   between them.
+
+The report also includes an experimental leadership and success-roadmap section.
+Those fields are explicitly labeled as hypotheses when the available sources do
+not support a factual conclusion.
+
+## Why Hindsight matters
+
+Hindsight is the differentiator, not a storage add-on. QuantMind uses the
+official Python client directly:
+
+```text
+Live market/news context
+        │
+        ├── recall(current headlines and catalyst context)
+        │
+        ▼
+Deterministic confidence + Groq evidence-grounded synthesis
+        │
+        ├── retain(completed research report)
+        └── reflect(periodic pattern summary)
+        │
+        ▼
+The next report has historical context
+```
+
+The memory lifecycle is:
+
+1. **Recall** — the first three live headlines become the semantic query. If
+   there is no news, QuantMind uses an asset/price/volume/catalyst query.
+2. **Analyze** — recalled reports are parsed into historical precedent records
+   and contribute to the memory signal.
+3. **Retain** — the completed report is stored in the asset-specific Hindsight
+   bank.
+4. **Reflect** — every fifth retained market event triggers a Hindsight
+   reflection that is stored as a meta-insight.
+
+The web UI's **With Memory** and **Without Memory** links make this effect
+visible. Memory-off runs skip recall and apply a clearly labeled deterministic
+confidence penalty; this is a controlled comparison for the demo, not a claim
+that confidence can be mathematically guaranteed by memory alone.
+
+Learn more from the [Hindsight documentation](https://hindsight.vectorize.io/)
+and the [Hindsight source repository](https://github.com/vectorize-io/hindsight).
 
 ## Architecture
 
 ```text
-Frontend (report page + before/after toggle)
-  -> FastAPI orchestrator
-     -> Hindsight recall (past patterns)
-     -> yfinance/CoinGecko fetch (live data)
-     -> deterministic confidence engine (12 verified signals)
-     -> Groq synthesis (classification + evidence-only narrative)
-     -> Hindsight retain (this report)
-     -> Hindsight reflect (every 5 market-event retains)
+Jinja2 terminal UI / API client
+              │
+              ▼
+        FastAPI application
+              │
+              ▼
+       QuantMindEngine
+       ┌──────┼─────────┐
+       │      │         │
+   yfinance  Hindsight  Groq
+ CoinGecko  recall/    synthesis
+            retain/
+            reflect
+              │
+              ▼
+  12-signal compatibility analytics
+  + separate 50-parameter confidence audit
 ```
 
-The terminal also exposes an explicit async state graph (`/analyze`) for clients that
-need phase-level observability. Its separate confidence audit evaluates 50 parameters
-across market, technical, fundamental, macro, and sentiment vectors. Missing provider
-data is recorded as unavailable rather than converted into invented facts; the legacy
-12-signal `analytics.py` engine remains the report's deterministic compatibility layer.
+The explicit `/analyze` endpoint also exposes a typed asynchronous state graph
+with acquisition, recall, analysis, completion, and failure phases. The graph
+is dependency-free and does not pretend to be a separate orchestration
+framework.
 
-## API
+## Deterministic confidence audit
 
-- `GET /` — landing page
-- `GET /api/report/{ticker}?date=YYYY-MM-DD&memory=true|false`
-- `GET /api/memory/status`
-- `GET /api/memory/{ticker}`
-- `GET /api/signals/{ticker}`
-- `GET /api/reflect/{ticker}?query=...` or `POST`
-- `GET /api/health`
-- `POST /analyze` — typed graph execution with the 50-parameter confidence audit
+The report's compatibility analytics remains in `foresight/analytics.py`.
+Alongside it, `foresight/confidence_engine.py` evaluates 50 auditable
+parameters across five vectors:
 
-Crypto uses `CRYPTO:bitcoin`, `CRYPTO:ethereum`, and other CoinGecko IDs.
+- Market
+- Technical
+- Fundamental
+- Macro
+- Sentiment
 
-## Scoring Alignment
+Missing provider data is recorded as unavailable and lowers coverage; it is not
+silently converted into fabricated facts. The current live provider set
+populates the parameters it can support and leaves the rest explicit for
+future connectors.
 
-| Criterion | How QuantMind addresses it |
+## Current integrations
+
+| Layer | Implementation |
 |---|---|
-| Innovation | Pattern engine and before/after memory experiment, not a generic chat interface. |
-| Hindsight Memory | `retain` + `recall` + `reflect`; Factor 4 is memory-only. |
-| Technical Implementation | Deterministic confidence and 12 verified live signals with weights. |
-| User Experience | Responsive report page, visible memory badge, citations, and Render deployment. |
-| Real-world Impact | Compresses hours of market research into a cited, inspectable report. |
+| Web/API | FastAPI, Uvicorn, Jinja2 |
+| Memory | Vectorize Hindsight Python SDK |
+| Synthesis | Async Groq client |
+| Equities/ETFs | yfinance |
+| Crypto | CoinGecko via `CRYPTO:<coin-id>` |
+| Deterministic analysis | Python signal and confidence engines |
+| Deployment | Docker and Render Blueprint |
+
+The repository also contains typed boundaries for future macro, sector,
+filings, flows, news, and correlation providers. They report unavailable data
+honestly; they are not fixture data.
 
 ## Run locally
 
+### Prerequisites
+
+- Python 3.11+
+- A Hindsight Cloud URL and token
+- A Groq API key for narrative synthesis
+
+### Configure
+
 ```powershell
+cd foresight
 Copy-Item .env.example .env
-# Set HINDSIGHT_API_URL, HINDSIGHT_API_TOKEN, and GROQ_API_KEY in .env.
-# Keep FORESIGHT_DEMO_MODE=false for the live Hindsight demo path.
-uv sync
-uv run uvicorn foresight.app:app --reload
+notepad .env
 ```
 
-Open http://localhost:8000. Render uses `Dockerfile` and `render.yaml`; configure
-the same secrets in Render's secret environment settings.
+Set these values in `.env`:
+
+```env
+HINDSIGHT_API_URL=https://api.hindsight.vectorize.io
+HINDSIGHT_API_TOKEN=your_rotated_hindsight_token
+GROQ_API_KEY=your_groq_key
+GROQ_MODEL=llama-3.3-70b-versatile
+FORESIGHT_DEMO_MODE=false
+```
+
+Never commit `.env`, API keys, or tokens. If a token has ever been pasted into
+chat or a public issue, revoke it and create a new one.
+
+### Install and start
+
+```powershell
+uv sync
+uv run uvicorn foresight.app:app --reload --port 8000
+```
+
+Open <http://127.0.0.1:8000>.
+
+## Demo workflow
+
+1. Run `PLTR`, `CRWD`, or `CRYPTO:bitcoin` with **With Memory**.
+2. Show the five-factor memo, confidence audit, source links, and Hindsight
+   memory count.
+3. Open the **Without Memory** link for the same asset.
+4. Compare the empty historical-precedent factor and the labeled confidence
+   penalty.
+5. Run the asset again with memory enabled after several retained reports.
+6. Show how the recalled precedent and periodic reflection change the report.
+
+Useful API calls:
+
+```text
+GET  /api/report/PLTR?memory=true
+GET  /api/report/PLTR?memory=false
+GET  /api/signals/PLTR
+GET  /api/memory/PLTR
+GET  /api/reflect/PLTR?query=What%20patterns%20emerge%3F
+POST /analyze
+GET  /docs
+```
+
+## Deploy for judging
+
+The repository is ready for Render:
+
+<https://github.com/22071a0473-blip/QuantMind>
+
+Create a Render Web Service from the repository and use the included
+`render.yaml` Blueprint. Add `HINDSIGHT_API_TOKEN` and `GROQ_API_KEY` as
+Render secret environment variables. Render will provide the public URL that
+you can submit to judges.
+
+## Judging criteria
+
+| Criterion | QuantMind evidence |
+|---|---|
+| **Innovation — 30%** | A research workflow that turns repeated market events into inspectable precedents rather than a generic chat response. |
+| **Hindsight Memory — 25%** | Direct `recall`, `retain`, and `reflect` usage, asset-specific banks, historical precedent, and a visible memory comparison. |
+| **Technical Implementation — 20%** | FastAPI, typed models, live providers, deterministic 12-signal analytics, 50-parameter confidence audit, async state graph, and Docker deployment. |
+| **User Experience — 15%** | A focused terminal UI with five factors, source evidence, memory status, confidence coverage, and a working memory toggle. |
+| **Real-world Impact — 10%** | Reduces the time required to form a sourced first-pass market brief while keeping uncertainty visible. |
+
+## Content submission checklist
+
+The Hindsight content guide asks each participant to publish:
+
+- one public technical article,
+- one social post linking to the article and project, and
+- one team video demonstrating the system.
+
+Keep the story specific and code-backed:
+
+1. Explain the problem of market-research memory loss.
+2. Show the actual `recall` → deterministic analysis → `retain` loop.
+3. Include a real before/after comparison with memory disabled/enabled.
+4. Mention limitations honestly: provider coverage, unavailable fields, and
+   that QuantMind is a research tool rather than financial advice.
+5. Add screenshots of the terminal UI, API response, Hindsight memory bank, and
+   architecture.
+
+Suggested article angle:
+
+> **I stopped asking an LLM why a stock moved and started asking what happened
+> the last time it moved this way.**
+
+Useful publishing references:
+
+- [Hindsight GitHub](https://github.com/vectorize-io/hindsight)
+- [Hindsight docs](https://hindsight.vectorize.io/)
+- [Vectorize: What is agent memory?](https://vectorize.io/what-is-agent-memory)
+- [Self-Driving Agents](https://github.com/vectorize-io/self-driving-agents)
+- [Groq](https://groq.com/)
+
+## Safety and scope
+
+QuantMind is a research and analysis tool, not financial advice. It does not
+guarantee returns, identify illegal insider information, or make autonomous
+trades. Every report includes a disclaimer, and unsupported conclusions should
+remain labeled as insufficient evidence or hypotheses.
+
+## License
+
+See the repository license and the licenses of the upstream providers and SDKs.
