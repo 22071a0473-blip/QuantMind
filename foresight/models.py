@@ -87,6 +87,10 @@ class Confidence(BaseModel):
     score: int = Field(ge=0, le=100)
     groups: dict[str, int]
     explanation: str
+    signal_count: int = Field(default=0, ge=0)
+    available_signals: int = Field(default=0, ge=0)
+    regime: str = "indeterminate"
+    audit_trail: list[str] = Field(default_factory=list)
 
 
 class History(BaseModel):

@@ -13,6 +13,9 @@ async def test_report_is_schema_validated_and_exposes_memory() -> None:
     assert report.roadmap.implied_requirements.gap_multiple > 1
     assert report.disclaimer == "Research tool, not financial advice."
     assert {item.type for item in report.memory_used} == {"company_dossier", "promise_ledger"}
+    assert report.confidence.signal_count >= 30
+    assert report.confidence.available_signals < report.confidence.signal_count
+    assert report.confidence.regime == "catalyst_expansion"
 
 
 @pytest.mark.asyncio

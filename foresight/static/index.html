@@ -34,7 +34,7 @@
         const conditions = r.roadmap.conditions.map(c => `<li><span class="status">${esc(c.status)}</span> ${esc(c.description)}</li>`).join('');
         return `<section class="grid">
           <div class="card wide"><div class="label">${esc(r.asset)} · move</div><div class="score">${esc(r.move.pct)}%</div><p>${esc(r.confidence.explanation)}</p></div>
-          <div class="card"><div class="label">Confidence</div><div class="score">${esc(r.confidence.score)}</div>${groups}</div>
+          <div class="card"><div class="label">Confidence · ${esc(r.confidence.regime)}</div><div class="score">${esc(r.confidence.score)}</div><p class="muted">${esc(r.confidence.available_signals)} / ${esc(r.confidence.signal_count)} signals available</p>${groups}</div>
           <div class="card"><div class="label">Memory used</div>${list(r.memory_used.map(m => `${m.type}: ${m.summary}`))}</div>
           <div class="card wide"><div class="label">Why it moved</div><ul>${drivers}</ul></div>
           <div class="card"><div class="label">Facts vs reality</div><p>${esc(r.facts_vs_reality.verdict)}</p><p class="muted">${esc(r.facts_vs_reality.market_view)}</p></div>

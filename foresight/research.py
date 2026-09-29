@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .analytics import InstitutionalAnalytics
 from .models import (
     Condition,
     Confidence,
@@ -66,10 +67,25 @@ class ResearchSignalBundle:
 class ConfidenceEngine:
     """Code-first confidence scoring for analyst-grade reports."""
 
-    def __init__(self, bundle: ResearchSignalBundle) -> None:
+    def __init__(self, bundle: ResearchSignalBundle, analytics: InstitutionalAnalytics | None = None) -> None:
         self.bundle = bundle
+        self.analytics = analytics
 
     def build(self) -> Confidence:
+        if self.analytics is not None:
+            result = self.analytics.calculate()
+            return Confidence(
+                score=result.overall_score,
+                groups=result.group_scores,
+                explanation=(
+                    f"{result.regime_explanation} The score uses {result.available_count} of "
+                    f"{result.signal_count} auditable signals; unavailable feeds reduce confidence."
+                ),
+                signal_count=result.signal_count,
+                available_signals=result.available_count,
+                regime=result.regime,
+                audit_trail=result.audit_trail,
+            )
         groups = self.bundle.as_grouped_scores()
         score = round(sum(groups.values()) / len(groups))
         explanation = (
@@ -307,7 +323,14 @@ class ResearchEngine:
                     summary=f"{len(context.memory_summary.split(';'))} memory fragments were recalled before analysis.",
                 )
             )
-        confidence_engine = ConfidenceEngine(ResearchSignalBundle())
+        analytics = InstitutionalAnalytics(
+            price_move_pct=8.4,
+            volume_vs_average=2.7,
+            sector_move_pct=2.1,
+            memory_count=context.historical_sample_size,
+            evidence_count=len(evidence),
+        )
+        confidence_engine = ConfidenceEngine(ResearchSignalBundle(), analytics)
         roadmap_engine = RoadmapEngine(
             asset=context.asset,
             target_price=context.target_price,

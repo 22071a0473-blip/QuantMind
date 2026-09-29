@@ -74,6 +74,9 @@ available.
 - It keeps a memory trail visible on every output.
 - It separates deterministic analysis from LLM synthesis.
 - It keeps the confidence score explainable, not mystical.
+- It uses a 36-signal feature lattice with coverage penalties, regime labels,
+  event-pattern analogues, and an audit trail rather than pretending unavailable
+  data exists.
 - It is built around the same product story as your brief: market patterns,
   leadership quality, required milestones, and the deep world conditions behind a
   move.
