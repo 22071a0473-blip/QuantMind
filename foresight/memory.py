@@ -42,8 +42,23 @@ class HindsightMemory:
     def bank_id(asset: str) -> str:
         return f"quantmind-{asset.lower()}"
 
+    async def _ensure_bank(self, bank_id: str) -> None:
+        try:
+            await self._client.aget_bank_config(bank_id=bank_id)
+        except Exception as exc:
+            status_code = getattr(exc, "status_code", None)
+            if status_code != 404:
+                raise
+            await self._client.acreate_bank(
+                bank_id=bank_id,
+                name=f"QuantMind {bank_id.removeprefix('quantmind-').upper()}",
+                mission="Build evidence-grounded market research from live data and historical memory.",
+                reflect_mission="Identify recurring market catalysts, regime shifts, and confidence failures.",
+            )
+
     async def recall(self, asset: str, query: str, limit: int = 5) -> RecalledMemory:
         bank_id = self.bank_id(asset)
+        await self._ensure_bank(bank_id)
         response = await self._client.arecall(
             bank_id=bank_id,
             query=query,
@@ -69,6 +84,7 @@ class HindsightMemory:
 
     async def retain(self, asset: str, report_json: str, price_change: float, primary_reason: str) -> int:
         bank_id = self.bank_id(asset)
+        await self._ensure_bank(bank_id)
         await self._client.aretain(
             bank_id=bank_id,
             content=report_json,
@@ -84,6 +100,7 @@ class HindsightMemory:
         return response.total
 
     async def reflect(self, asset: str, query: str) -> str:
+        await self._ensure_bank(self.bank_id(asset))
         response = await self._client.areflect(
             bank_id=self.bank_id(asset),
             query=query,
@@ -93,6 +110,7 @@ class HindsightMemory:
         return response.text if hasattr(response, "text") else str(response)
 
     async def retain_insight(self, asset: str, insight: str, based_on_count: int) -> None:
+        await self._ensure_bank(self.bank_id(asset))
         await self._client.aretain(
             bank_id=self.bank_id(asset),
             content=f"META-INSIGHT: {insight}",
@@ -105,6 +123,7 @@ class HindsightMemory:
         )
 
     async def list_memories(self, asset: str, limit: int = 100) -> dict[str, Any]:
+        await self._ensure_bank(self.bank_id(asset))
         response = await self._client.alist_memories(bank_id=self.bank_id(asset), limit=limit)
         return {
             "bank_id": self.bank_id(asset),
