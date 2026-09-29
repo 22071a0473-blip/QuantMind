@@ -5,7 +5,9 @@ from foresight.memory import MemoryService
 
 
 @pytest.mark.asyncio
-async def test_report_is_schema_validated_and_exposes_memory() -> None:
+async def test_report_is_schema_validated_and_exposes_memory(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("HINDSIGHT_API_URL", raising=False)
+    monkeypatch.delenv("HINDSIGHT_API_TOKEN", raising=False)
     report = await build_report("PLTR", 40, MemoryService())
 
     assert report.asset == "PLTR"
@@ -19,7 +21,9 @@ async def test_report_is_schema_validated_and_exposes_memory() -> None:
 
 
 @pytest.mark.asyncio
-async def test_memory_round_trip_is_visible() -> None:
+async def test_memory_round_trip_is_visible(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("HINDSIGHT_API_URL", raising=False)
+    monkeypatch.delenv("HINDSIGHT_API_TOKEN", raising=False)
     memory = MemoryService()
     await memory.retain("PLTR", "A milestone changed.")
 

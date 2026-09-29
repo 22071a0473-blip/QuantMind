@@ -8,7 +8,7 @@ from .llm import GroqSynthesizer
 from .memory import MemoryService
 from .sources import MarketSources
 
-app = FastAPI(title="Foresight", version="0.1.0")
+app = FastAPI(title="QuantMind", version="0.1.0")
 memory = MemoryService()
 sources = MarketSources()
 synthesizer = GroqSynthesizer()

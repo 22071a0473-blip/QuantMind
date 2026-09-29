@@ -1,6 +1,8 @@
-# Foresight
+# QuantMind
 
-Foresight is a memory-backed market research system built for the hackathon brief:
+**QuantMind is the public web app for the hackathon submission.**
+
+QuantMind is a memory-backed market research system built for the hackathon brief:
 why an asset moved, what leadership did, what must happen next, how confident the
 analysis is, and how similar patterns behaved historically.
 
@@ -113,6 +115,17 @@ Frontend (report page)
 
 Your strongest pitch is:
 
-"Foresight is a memory-backed research engine for market-moving companies and
+"QuantMind is a memory-backed research engine for market-moving companies and
 crypto assets. It remembers why the move happened, what leadership promised, what
 must happen next, and how similar patterns behaved before."
+
+## Public hosting
+
+The repository includes `Dockerfile` and `render.yaml` for deployment on Render.
+After connecting `22071a0473-blip/foresight` in Render, choose **Blueprint** and
+Render will create a public HTTPS URL. Add `HINDSIGHT_API_URL` and
+`HINDSIGHT_API_TOKEN` as secret environment variables in the Render service.
+Never commit `.env` or a token to the repository.
+
+The judge can then access the generated `https://...onrender.com` URL without
+running anything locally. The `/api/health` endpoint is used as the health check.
