@@ -296,6 +296,7 @@ name = "foresight"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "aiohttp" },
     { name = "fastapi" },
     { name = "hindsight-client" },
     { name = "pydantic" },
@@ -311,6 +312,7 @@ test = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiohttp", specifier = ">=3.10" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "hindsight-client", specifier = ">=0.10.1" },
     { name = "httpx", marker = "extra == 'test'", specifier = ">=0.27" },

@@ -26,6 +26,7 @@ from .models import (
     Report,
     Roadmap,
 )
+from .sources import SourceBundle
 
 
 @dataclass(slots=True)
@@ -248,6 +249,7 @@ class ResearchContext:
     current_market_cap: float = 52_000_000_000.0
     memory_summary: str = ""
     historical_sample_size: int = 1
+    source_bundle: SourceBundle | None = None
 
 
 class ResearchEngine:
@@ -265,6 +267,17 @@ class ResearchEngine:
                 snippet="The report is grounded in recalled memory and a seeded evidence bundle for the Hackathon prototype.",
             )
         ]
+        if context.source_bundle is not None:
+            evidence = context.source_bundle.evidence or evidence
+            if context.source_bundle.source_status.get("sec_filings") != "ok":
+                evidence.append(
+                    Evidence(
+                        source="SEC connector",
+                        url="https://www.sec.gov/edgar/search/",
+                        date="",
+                        snippet="SEC evidence was unavailable for this request; no leadership claim is inferred.",
+                    )
+                )
         driver = Driver(
             category="product_or_tech",
             share=0.55,

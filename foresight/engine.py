@@ -1,9 +1,15 @@
 from .memory import MemoryService
 from .models import Report
 from .research import ResearchContext, ResearchEngine
+from .sources import SourceBundle
 
 
-async def build_report(asset: str, target_price: float, memory: MemoryService) -> Report:
+async def build_report(
+    asset: str,
+    target_price: float,
+    memory: MemoryService,
+    source_bundle: SourceBundle | None = None,
+) -> Report:
     """Build a research report that keeps the confidence engine and the memory loop explicit.
 
     The implementation intentionally preserves the public API while moving the heavy
@@ -27,5 +33,6 @@ async def build_report(asset: str, target_price: float, memory: MemoryService) -
         current_market_cap=52_000_000_000.0,
         memory_summary=memory_summary,
         historical_sample_size=max(1, len(recalled.items)),
+        source_bundle=source_bundle,
     )
     return ResearchEngine(memory_summary).build_report(context)
