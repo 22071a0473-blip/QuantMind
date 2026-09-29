@@ -202,17 +202,6 @@ POST /analyze
 GET  /docs
 ```
 
-## Deploy for judging
-
-The repository is ready for Render:
-
-<https://github.com/22071a0473-blip/QuantMind>
-
-Create a Render Web Service from the repository and use the included
-`render.yaml` Blueprint. Add `HINDSIGHT_API_TOKEN` and `GROQ_API_KEY` as
-Render secret environment variables. Render will provide the public URL that
-you can submit to judges.
-
 ## Judging criteria
 
 | Criterion | QuantMind evidence |
