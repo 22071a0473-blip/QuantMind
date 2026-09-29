@@ -75,7 +75,8 @@ class GroqResearcher:
                 last_error = exc
                 logger.warning("Groq synthesis failed on attempt %s: %s", attempt + 1, exc)
                 await asyncio.sleep(2**attempt)
-        deterministic_report.warning = f"Groq synthesis failed after retries: {last_error}"
+        logger.warning("Groq synthesis exhausted retries; using deterministic report: %s", last_error)
+        deterministic_report.warning = "Live synthesis unavailable; deterministic analysis shown."
         return deterministic_report
 
     @staticmethod

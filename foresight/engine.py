@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -22,6 +23,8 @@ from .models import (
     SuccessRoadmap,
 )
 from .sources import LiveMarketSources, LiveResearchData
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -156,7 +159,8 @@ class QuantMindEngine:
                 deterministic,
             )
         except Exception as exc:
-            deterministic.warning = f"Groq synthesis unavailable: {exc}"
+            logger.warning("Groq synthesis unavailable; using deterministic report: %s", exc)
+            deterministic.warning = "Live synthesis unavailable; deterministic analysis shown."
             report = deterministic
 
         report.historical_precedent = precedent
