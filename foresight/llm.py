@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from typing import Any
@@ -19,29 +20,44 @@ class GroqResearcher:
         asset: str,
         live_data: str,
         recalled_memory: str,
-        deterministic_report: str,
+        deterministic_report: Report,
     ) -> Report:
         system = (
             "You are QuantMind, a cautious institutional research analyst. Return only valid JSON "
             "matching the supplied Pydantic report schema. Use only live data and recalled memory. "
-            "Never invent a person, number, deal, source, price, or historical case. If evidence is "
-            "missing, state the gap. This is scenario analysis, never financial advice."
+            "For every factual claim, include a source object with source_type "
+            "(news, sec_filing, price_data, macro_data, or memory), source_url if available, headline "
+            "if news, and date. Never state a fact you cannot source from the provided evidence; say "
+            "'insufficient evidence' instead of guessing. Preserve the deterministic snapshot and confidence."
         )
         user = (
             f"Asset: {asset}\n\nLIVE DATA:\n{live_data}\n\nHINDSIGHT MEMORY:\n{recalled_memory}\n\n"
-            f"DETERMINISTIC REPORT SHELL:\n{deterministic_report}\n\n"
-            "Complete the five factors: primary drivers, deep research, leadership, success roadmap, "
-            "and facts versus reality. Preserve the deterministic confidence object and snapshot."
+            f"DETERMINISTIC REPORT SHELL:\n{deterministic_report.model_dump_json()}\n\n"
+            "Complete factors 1, 2, and 5 plus extended_analysis. Factor 4 is the supplied historical "
+            "precedent and must not be replaced with invented history."
         )
-        response = await self._client.chat.completions.create(
-            model=self._model,
-            temperature=0.1,
-            max_tokens=8000,
-            response_format={"type": "json_object"},
-            messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-        )
-        content = response.choices[0].message.content
-        if not content:
-            raise ValueError("Groq returned an empty research response.")
-        payload: dict[str, Any] = json.loads(content)
-        return Report.model_validate(payload)
+        last_error: Exception | None = None
+        for attempt in range(3):
+            try:
+                response = await self._client.chat.completions.create(
+                    model=self._model,
+                    temperature=0.1,
+                    max_tokens=8000,
+                    response_format={"type": "json_object"},
+                    messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+                )
+                content = response.choices[0].message.content
+                if not content:
+                    raise ValueError("Groq returned an empty research response.")
+                payload: dict[str, Any] = json.loads(content)
+                return Report.model_validate(payload)
+            except (json.JSONDecodeError, ValueError, TypeError) as exc:
+                last_error = exc
+                if attempt == 1:
+                    user += "\nReturn the complete JSON object again. Do not omit any required field."
+                await asyncio.sleep(2**attempt)
+            except Exception as exc:
+                last_error = exc
+                await asyncio.sleep(2**attempt)
+        deterministic.warning = f"Groq synthesis failed after retries: {last_error}"
+        return deterministic

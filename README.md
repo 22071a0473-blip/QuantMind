@@ -1,38 +1,73 @@
 # QuantMind
 
-QuantMind is a deployable, memory-backed market research engine. It is not a
-chatbot and it does not ship fixture data or a local fallback in the demo path.
-Each report uses live yfinance/CoinGecko data, recalls the asset's Hindsight bank,
-asks Groq to synthesize only the supplied evidence, and retains the validated
-report for future pattern comparison.
+QuantMind produces a structured five-factor report for any ticker, backed by live
+market data and Hindsight memory. Every number in the report is traceable to a
+live provider or an explicitly labeled memory record; see `/api/signals/{ticker}`.
 
-## Five-factor report
+## Five factors
 
-1. **Why it moved** — ranked catalyst categories with probabilities and citations.
-2. **Deep research** — company, sector, macro, and live news context.
-3. **Leadership** — sourced CEO/board track record, promises, allocation, and governance gaps.
-4. **Success roadmap** — deals, orders, policy, adoption, scenarios, and kill conditions.
-5. **Facts vs reality** — reported facts, market narrative, and the evidence gap.
+1. **Why it moved** — catalyst classification with source citations.
+2. **Deep research** — company, sector, macro, and news evidence.
+3. **Confidence meter** — deterministic score, coverage, regime, and signal audit.
+4. **Historical precedent** — dated similar moves recalled from the Hindsight bank.
+5. **Facts vs reality** — reported facts, market narrative, and evidence gaps.
 
-The confidence score is deterministic: a 36-signal lattice, regime classifier,
-coverage penalty, signal audit, and Hindsight memory depth. Groq never calculates
-the score or invents missing data.
+Leadership and the success roadmap live below the factors in **Extended Analysis
+(experimental)**. They are hypotheses, not facts.
 
-## Run
+## Memory in Action
+
+1. Query `PLTR` and show the confidence meter and the empty first-observation precedent.
+2. Run five analyses on different trading dates; each report is retained in the PLTR Hindsight bank.
+3. Query PLTR again and show the dated precedent timeline, memory badge, and confidence lift.
+
+Use the `With Memory` / `Without Memory` toggle to demonstrate the control:
+without Hindsight, Factor 4 is empty and the precedent contribution is removed
+from confidence. Add the before/after screenshots to the hackathon submission.
+
+## Architecture
+
+```text
+Frontend (report page + before/after toggle)
+  -> FastAPI orchestrator
+     -> Hindsight recall (past patterns)
+     -> yfinance/CoinGecko fetch (live data)
+     -> deterministic confidence engine (12 verified signals)
+     -> Groq synthesis (classification + evidence-only narrative)
+     -> Hindsight retain (this report)
+     -> Hindsight reflect (every 5 market-event retains)
+```
+
+## API
+
+- `GET /` — landing page
+- `GET /api/report/{ticker}?date=YYYY-MM-DD&memory=true|false`
+- `GET /api/memory/status`
+- `GET /api/memory/{ticker}`
+- `GET /api/signals/{ticker}`
+- `GET /api/reflect/{ticker}?query=...` or `POST`
+- `GET /api/health`
+
+Crypto uses `CRYPTO:bitcoin`, `CRYPTO:ethereum`, and other CoinGecko IDs.
+
+## Scoring Alignment
+
+| Criterion | How QuantMind addresses it |
+|---|---|
+| Innovation | Pattern engine and before/after memory experiment, not a generic chat interface. |
+| Hindsight Memory | `retain` + `recall` + `reflect`; Factor 4 is memory-only. |
+| Technical Implementation | Deterministic confidence and 12 verified live signals with weights. |
+| User Experience | Responsive report page, visible memory badge, citations, and Render deployment. |
+| Real-world Impact | Compresses hours of market research into a cited, inspectable report. |
+
+## Run locally
 
 ```powershell
 Copy-Item .env.example .env
-# Put the Hindsight Cloud and Groq credentials in .env locally.
+# Set HINDSIGHT_API_URL, HINDSIGHT_API_TOKEN, and GROQ_API_KEY in .env.
 uv sync
 uv run uvicorn foresight.app:app --reload
 ```
 
-Open http://localhost:8000. Use `CRYPTO:bitcoin` for CoinGecko or a stock ticker
-such as `PLTR`, `CRWD`, or `NVDA`.
-
-## Deploy
-
-The repository contains `Dockerfile` and `render.yaml`. In Render, import the
-GitHub repository as a Blueprint and set `HINDSIGHT_API_URL`, `HINDSIGHT_API_TOKEN`,
-`GROQ_API_KEY`, and `FORESIGHT_SEC_USER_AGENT` as secret environment variables.
-Render then provides the public HTTPS URL to submit to judges.
+Open http://localhost:8000. Render uses `Dockerfile` and `render.yaml`; configure
+the same secrets in Render's secret environment settings.

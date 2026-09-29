@@ -5,6 +5,13 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+class SourceCitation(BaseModel):
+    source_type: Literal["news", "sec_filing", "price_data", "macro_data", "memory"]
+    source_url: str | None = None
+    headline: str | None = None
+    date: str
+
+
 class Evidence(BaseModel):
     source: str
     url: str
@@ -33,7 +40,9 @@ class NewsItem(BaseModel):
 class MemoryUsed(BaseModel):
     bank_id: str
     recalled_count: int = Field(ge=0)
+    total_count: int = Field(ge=0)
     patterns: list[str]
+    backend: Literal["hindsight-cloud"] = "hindsight-cloud"
 
 
 class Driver(BaseModel):
@@ -41,12 +50,15 @@ class Driver(BaseModel):
     probability: float = Field(ge=0, le=1)
     explanation: str
     evidence: list[Evidence]
+    sources: list[SourceCitation] = Field(default_factory=list)
 
 
 class DeepResearch(BaseModel):
     company: str
     sector: str
     macro: str
+    news: str
+    sources: list[SourceCitation] = Field(default_factory=list)
 
 
 class LeadershipAssessment(BaseModel):
@@ -75,20 +87,42 @@ class SuccessRoadmap(BaseModel):
     kill_conditions: list[str]
 
 
+class ExtendedAnalysis(BaseModel):
+    leadership: LeadershipAssessment
+    roadmap: SuccessRoadmap
+    note: str = "These sections are speculative and LLM-generated. Treat them as hypotheses, not facts."
+
+
 class ConfidenceReport(BaseModel):
     score: int = Field(ge=0, le=100)
     signals_available: int = Field(ge=0)
     signals_total: int = Field(ge=1)
+    coverage: float = Field(ge=0, le=1)
     regime: str
     groups: dict[str, int]
     explanation: str
     audit: list[str]
+    sources: list[SourceCitation] = Field(default_factory=list)
 
 
-class HistoryReport(BaseModel):
-    recalled_patterns: list[str]
-    sample_size: int = Field(ge=0)
-    limitation: str
+class PrecedentMove(BaseModel):
+    date: str
+    price_change: float
+    reason: str
+    follow_through_5d: float | None = None
+    source: SourceCitation
+
+
+class HistoricalPrecedent(BaseModel):
+    count: int = Field(ge=0)
+    dates: list[str]
+    price_changes: list[float]
+    reasons: list[str]
+    follow_through_5d: list[float | None]
+    average_follow_through: float | None
+    moves: list[PrecedentMove]
+    narrative: str
+    meta_insight: str | None = None
 
 
 class FactsVsReality(BaseModel):
@@ -96,21 +130,39 @@ class FactsVsReality(BaseModel):
     market_narrative: str
     gap: str
     evidence: list[Evidence]
+    sources: list[SourceCitation] = Field(default_factory=list)
+
+
+class SignalView(BaseModel):
+    name: str
+    value: float
+    weight: float
+    source: str
+    explanation: str
+
+
+class SignalResponse(BaseModel):
+    ticker: str
+    signals: list[SignalView]
+    total_signals: int
+    confidence_score: int
+    coverage: float
 
 
 class Report(BaseModel):
     asset: str
     generated_at: str
     snapshot: MarketSnapshot
-    primary_drivers: list[Driver]
-    deep_research: DeepResearch
-    leadership: LeadershipAssessment
-    roadmap: SuccessRoadmap
-    confidence: ConfidenceReport
-    history: HistoryReport
-    facts_vs_reality: FactsVsReality
+    factor_1_why_it_moved: list[Driver]
+    factor_2_deep_research: DeepResearch
+    confidence_meter: ConfidenceReport
+    historical_precedent: HistoricalPrecedent
+    factor_5_facts_vs_reality: FactsVsReality
+    extended_analysis: ExtendedAnalysis
     memory_used: MemoryUsed
     live_news: list[NewsItem]
+    memory_impact: str | None = None
+    warning: str | None = None
     disclaimer: Literal["Research tool, not financial advice."] = (
         "Research tool, not financial advice."
     )

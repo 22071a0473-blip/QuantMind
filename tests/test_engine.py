@@ -1,6 +1,7 @@
 import pytest
 
 from foresight.memory import HindsightMemory
+from foresight.memory import MemoryRecord, summarize_precedent
 from foresight.models import MarketSnapshot, Report
 
 
@@ -24,3 +25,14 @@ def test_hindsight_requires_cloud_configuration(monkeypatch: pytest.MonkeyPatch)
 
 def test_report_disclaimer_is_fixed() -> None:
     assert Report.model_fields["disclaimer"].default == "Research tool, not financial advice."
+
+
+def test_precedent_extracts_retained_report_event() -> None:
+    record = MemoryRecord(
+        text='{"generated_at":"2026-09-25T12:00:00Z","snapshot":{"change_pct":6.2},"factor_1_why_it_moved":[{"category":"Contract"}]}',
+        date=None,
+    )
+    precedent = summarize_precedent("PLTR", [record])
+    assert precedent.count == 1
+    assert precedent.moves[0].date == "2026-09-25"
+    assert precedent.moves[0].reason == "Contract"

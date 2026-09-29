@@ -1,23 +1,24 @@
 from foresight.analytics import InstitutionalAnalytics
+from foresight.sources import MarketFeatures
 
 
-def test_analytics_is_regime_aware_and_penalizes_missing_data() -> None:
+def test_analytics_uses_real_feature_lattice_and_regime() -> None:
     result = InstitutionalAnalytics(
-        price_move_pct=8.4,
-        volume_vs_average=2.7,
-        sector_move_pct=2.1,
+        features=MarketFeatures(8.4, 10, 15, 2, 2.7, -4, 0.5, 4, 3, 2, 70, 4),
         memory_count=4,
-        evidence_count=5,
     ).calculate()
 
-    assert result.signal_count >= 30
-    assert result.available_count < result.signal_count
+    assert result.signals
+    assert len(result.signals) == 12
     assert result.regime == "catalyst_expansion"
     assert result.group_scores["price_and_volume"] > 50
-    assert any("coverage=" in item for item in result.audit_trail)
+    assert any("coverage" not in item for item in result.audit_trail)
 
 
 def test_negative_high_volume_move_is_stress_regime() -> None:
-    result = InstitutionalAnalytics(price_move_pct=-8, volume_vs_average=3).calculate()
+    result = InstitutionalAnalytics(
+        features=MarketFeatures(-8, -10, -15, 2, 3, -30, -0.5, -4, -3, -2, 20, 0),
+        memory_count=0,
+    ).calculate()
 
     assert result.regime == "catalyst_stress"

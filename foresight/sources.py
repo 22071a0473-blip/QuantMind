@@ -16,6 +16,23 @@ class LiveResearchData:
     snapshot: MarketSnapshot
     evidence: list[Evidence]
     news: list[NewsItem]
+    features: MarketFeatures
+
+
+@dataclass(slots=True)
+class MarketFeatures:
+    return_1d: float
+    return_5d: float
+    return_20d: float
+    volatility_20d: float
+    volume_ratio: float
+    drawdown_1y: float
+    momentum_20d: float
+    trend_slope: float
+    price_vs_sma20: float
+    price_vs_sma50: float
+    high_low_position: float
+    news_count: float
 
 
 class LiveMarketSources:
@@ -49,6 +66,25 @@ class LiveMarketSources:
             market_cap=float(market_cap) if market_cap else None,
             history_days=len(close),
         )
+        returns = close.pct_change().dropna()
+        sma20 = float(close.tail(20).mean())
+        sma50 = float(close.tail(50).mean())
+        year_high = float(close.max())
+        year_low = float(close.min())
+        features = MarketFeatures(
+            return_1d=snapshot.change_pct,
+            return_5d=float((close.iloc[-1] / close.iloc[-6] - 1) * 100) if len(close) > 5 else snapshot.change_pct,
+            return_20d=float((close.iloc[-1] / close.iloc[-21] - 1) * 100) if len(close) > 20 else snapshot.change_pct,
+            volatility_20d=float(returns.tail(20).std() * 100),
+            volume_ratio=snapshot.volume_ratio or 1,
+            drawdown_1y=float((latest_price / year_high - 1) * 100),
+            momentum_20d=float(returns.tail(20).mean() * 100),
+            trend_slope=float((close.tail(20).iloc[-1] - close.tail(20).iloc[0]) / max(sma20, 0.0001) * 100),
+            price_vs_sma20=float((latest_price / sma20 - 1) * 100),
+            price_vs_sma50=float((latest_price / sma50 - 1) * 100),
+            high_low_position=float((latest_price - year_low) / max(year_high - year_low, 0.0001) * 100),
+            news_count=float(len(news)),
+        )
         news = [
             NewsItem(
                 title=str(item.get("title", "Untitled")),
@@ -80,7 +116,7 @@ class LiveMarketSources:
             )
             for item in news
         )
-        return LiveResearchData(snapshot=snapshot, evidence=evidence, news=news)
+        return LiveResearchData(snapshot=snapshot, evidence=evidence, news=news, features=features)
 
     def _crypto(self, asset: str) -> LiveResearchData:
         coin_id = asset.lower().replace(" ", "-")
@@ -105,4 +141,18 @@ class LiveMarketSources:
                 snippet=f"{coin_id} live USD price {price:.4f}; 24-hour change {change:.2f}%.",
             )
         ]
-        return LiveResearchData(snapshot=snapshot, evidence=evidence, news=[])
+        features = MarketFeatures(
+            return_1d=change,
+            return_5d=change,
+            return_20d=change,
+            volatility_20d=0,
+            volume_ratio=1,
+            drawdown_1y=float(market.get("ath_change_percentage", {}).get("usd", 0)),
+            momentum_20d=change,
+            trend_slope=change,
+            price_vs_sma20=change,
+            price_vs_sma50=change,
+            high_low_position=50,
+            news_count=0,
+        )
+        return LiveResearchData(snapshot=snapshot, evidence=evidence, news=[], features=features)
