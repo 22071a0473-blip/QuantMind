@@ -60,10 +60,16 @@ Then open:
 Set environment variables for Hindsight if you want live memory instead of the
 built-in local fallback:
 
-```bash
-export HINDSIGHT_API_URL="https://api.hindsight.vectorize.io"
-export HINDSIGHT_API_TOKEN="hsk_..."
+```powershell
+Copy-Item .env.example .env
+# Edit .env and replace HINDSIGHT_API_TOKEN with the token from Hindsight Cloud.
 ```
+
+The browser session proves your identity in the dashboard, but the local app
+needs an API token of its own. Do not send the token in chat or commit `.env`.
+After starting the server, verify `GET http://localhost:8000/api/memory/status`
+returns `{"backend":"hindsight-cloud"}`. If it returns `local-demo`, the token or
+URL is missing/invalid in the process environment.
 
 The app keeps a local in-memory fallback for demos when no Hindsight server is
 available.

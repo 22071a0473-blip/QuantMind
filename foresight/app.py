@@ -25,6 +25,11 @@ async def health() -> dict[str, str]:
     return {"status": "ok", "service": "foresight"}
 
 
+@app.get("/api/memory/status")
+async def memory_status() -> dict[str, str]:
+    return {"backend": memory.backend}
+
+
 @app.get("/api/report/{asset}")
 async def report(
     asset: str,

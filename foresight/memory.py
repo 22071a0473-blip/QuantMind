@@ -1,6 +1,10 @@
 import os
 from dataclasses import dataclass
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 @dataclass
 class MemoryResult:
@@ -25,6 +29,12 @@ class MemoryService:
                 )
             except ImportError:
                 self._client = None
+
+    @property
+    def backend(self) -> str:
+        if self._client is not None:
+            return "hindsight-cloud"
+        return "local-demo"
 
     async def recall(self, asset: str, query: str) -> MemoryResult:
         if self._client is None:
