@@ -46,7 +46,10 @@ class HindsightMemory:
         try:
             await self._client.aget_bank_config(bank_id=bank_id)
         except Exception as exc:
-            status_code = getattr(exc, "status_code", None)
+            status_code = getattr(exc, "status_code", None) or getattr(exc, "status", None)
+            response = getattr(exc, "response", None)
+            if status_code is None and response is not None:
+                status_code = getattr(response, "status", None)
             if status_code != 404:
                 raise
             await self._client.acreate_bank(
