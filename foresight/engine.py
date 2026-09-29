@@ -1,38 +1,98 @@
-from .memory import MemoryService
-from .models import Report
-from .research import ResearchContext, ResearchEngine
-from .sources import SourceBundle
+from __future__ import annotations
+
+import json
+from datetime import UTC, datetime
+
+from .analytics import InstitutionalAnalytics
+from .llm import GroqResearcher
+from .memory import HindsightMemory
+from .models import (
+    ConfidenceReport,
+    DeepResearch,
+    FactsVsReality,
+    HistoryReport,
+    LeadershipAssessment,
+    MemoryUsed,
+    Report,
+    RoadmapCondition,
+    SuccessRoadmap,
+)
+from .sources import LiveMarketSources, LiveResearchData
 
 
-async def build_report(
-    asset: str,
-    target_price: float,
-    memory: MemoryService,
-    source_bundle: SourceBundle | None = None,
-) -> Report:
-    """Build a research report that keeps the confidence engine and the memory loop explicit.
+class QuantMindEngine:
+    def __init__(self, memory: HindsightMemory, researcher: GroqResearcher) -> None:
+        self._memory = memory
+        self._researcher = researcher
+        self._sources = LiveMarketSources()
 
-    The implementation intentionally preserves the public API while moving the heavy
-    logic into a dedicated research layer. That keeps the model/engine split clear,
-    and it makes the app far easier to extend with real news, filings, and price feeds.
-    """
-    asset_name = asset.upper()
-    recalled = await memory.recall(
-        asset_name,
-        "company dossier leadership promises milestones historical events and market catalysts",
-    )
-    memory_summary = "; ".join(recalled.items) if recalled.items else ""
-    await memory.retain(
-        asset_name,
-        f"Foresight retained a structured research memo for {asset_name}; confidence is recalculated from evidence and memory.",
-    )
-    context = ResearchContext(
-        asset=asset_name,
-        target_price=target_price,
-        current_price=22.5,
-        current_market_cap=52_000_000_000.0,
-        memory_summary=memory_summary,
-        historical_sample_size=max(1, len(recalled.items)),
-        source_bundle=source_bundle,
-    )
-    return ResearchEngine(memory_summary).build_report(context)
+    async def research(self, asset: str, target_price: float | None = None) -> Report:
+        live = await self._sources.gather(asset)
+        recalled = await self._memory.recall(live.snapshot.asset, "market moves, prior catalysts, leadership, deals, and outcomes")
+        analytics = InstitutionalAnalytics(
+            price_move_pct=live.snapshot.change_pct,
+            volume_vs_average=live.snapshot.volume_ratio or 1,
+            sector_move_pct=0,
+            memory_count=len(recalled.texts),
+            evidence_count=len(live.evidence),
+        ).calculate()
+        deterministic = Report(
+            asset=live.snapshot.asset,
+            generated_at=datetime.now(UTC).isoformat(),
+            snapshot=live.snapshot,
+            primary_drivers=[],
+            deep_research=DeepResearch(company="", sector="", macro=""),
+            leadership=LeadershipAssessment(
+                people=[],
+                prior_track_record="Awaiting sourced synthesis.",
+                execution_vs_promises="Awaiting sourced synthesis.",
+                capital_allocation="Awaiting sourced synthesis.",
+                governance_and_alignment="Awaiting sourced synthesis.",
+                evidence_gaps=["Leadership records must be retrieved from filings and verified by the synthesis step."],
+                evidence=live.evidence,
+            ),
+            roadmap=SuccessRoadmap(
+                success_definition="Awaiting scenario synthesis from live evidence.",
+                required_conditions=[],
+                bull_case="Awaiting synthesis.",
+                base_case="Awaiting synthesis.",
+                bear_case="Awaiting synthesis.",
+                kill_conditions=[],
+            ),
+            confidence=ConfidenceReport(
+                score=analytics.overall_score,
+                signals_available=analytics.available_count,
+                signals_total=analytics.signal_count,
+                regime=analytics.regime,
+                groups=analytics.group_scores,
+                explanation=analytics.regime_explanation,
+                audit=analytics.audit_trail,
+            ),
+            history=HistoryReport(
+                recalled_patterns=recalled.texts,
+                sample_size=len(recalled.texts),
+                limitation="Only patterns actually recalled from this Hindsight bank are shown.",
+            ),
+            facts_vs_reality=FactsVsReality(
+                reported_facts="Awaiting sourced synthesis.",
+                market_narrative="Awaiting sourced synthesis.",
+                gap="Awaiting sourced synthesis.",
+                evidence=live.evidence,
+            ),
+            memory_used=MemoryUsed(
+                bank_id=recalled.bank_id,
+                recalled_count=len(recalled.texts),
+                patterns=recalled.texts,
+            ),
+            live_news=live.news,
+        )
+        report = await self._researcher.synthesize(
+            live.snapshot.asset,
+            json.dumps({"snapshot": live.snapshot.model_dump(), "evidence": [item.model_dump() for item in live.evidence], "news": [item.model_dump() for item in live.news]}),
+            "\n".join(recalled.texts),
+            deterministic.model_dump_json(),
+        )
+        if target_price is not None:
+            report.roadmap.success_definition += f" Target-price scenario input: {target_price:.4f}; this is not a prediction."
+        await self._memory.retain(live.snapshot.asset, report.model_dump_json())
+        return report

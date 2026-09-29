@@ -1,45 +1,53 @@
+from __future__ import annotations
+
 from pathlib import Path
 
-from fastapi import FastAPI, Query
-from fastapi.responses import FileResponse
+from dotenv import load_dotenv
+from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 
-from .engine import build_report
-from .llm import GroqSynthesizer
-from .memory import MemoryService
-from .sources import MarketSources
+from .engine import QuantMindEngine
+from .llm import GroqResearcher
+from .memory import HindsightMemory
 
-app = FastAPI(title="QuantMind", version="0.1.0")
-memory = MemoryService()
-sources = MarketSources()
-synthesizer = GroqSynthesizer()
-STATIC_INDEX = Path(__file__).parent / "static" / "index.html"
+load_dotenv()
+
+app = FastAPI(title="QuantMind", version="1.0.0")
+templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
 
-@app.get("/")
-async def home() -> FileResponse:
-    return FileResponse(STATIC_INDEX)
+def build_engine() -> QuantMindEngine:
+    try:
+        return QuantMindEngine(HindsightMemory(), GroqResearcher())
+    except KeyError as exc:
+        raise RuntimeError(f"Missing required environment variable: {exc.args[0]}") from exc
+
+
+@app.get("/", response_class=HTMLResponse)
+async def home(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request=request, name="index.html", context={"report": None, "error": None})
+
+
+@app.post("/research", response_class=HTMLResponse)
+async def research(
+    request: Request,
+    asset: str = Form(min_length=1, max_length=40),
+    target_price: float | None = Form(default=None, gt=0),
+) -> HTMLResponse:
+    try:
+        report = await build_engine().research(asset, target_price)
+        return templates.TemplateResponse(request=request, name="index.html", context={"report": report, "error": None})
+    except Exception as exc:
+        return templates.TemplateResponse(
+            request=request,
+            name="index.html",
+            context={"report": None, "error": f"Research failed: {exc}"},
+            status_code=502,
+        )
 
 
 @app.get("/api/health")
 async def health() -> dict[str, str]:
-    return {"status": "ok", "service": "foresight"}
-
-
-@app.get("/api/memory/status")
-async def memory_status() -> dict[str, str]:
-    return {"backend": memory.backend}
-
-
-@app.get("/api/report/{asset}")
-async def report(
-    asset: str,
-    target_price: float = Query(default=40.0, gt=0),
-):
-    source_bundle = await sources.gather(asset)
-    report = await build_report(asset, target_price, memory, source_bundle)
-    return await synthesizer.enrich(report, source_bundle.evidence)
-
-
-@app.post("/api/reflect/{asset}")
-async def reflect(asset: str, query: str = Query(min_length=1)):
-    return {"asset": asset.upper(), "answer": await memory.reflect(asset.upper(), query)}
+    build_engine()
+    return {"status": "ok", "service": "quantmind", "memory": "hindsight-cloud", "llm": "groq"}

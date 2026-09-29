@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -10,121 +12,105 @@ class Evidence(BaseModel):
     snippet: str
 
 
-class Driver(BaseModel):
-    category: Literal[
-        "earnings",
-        "guidance",
-        "contract_deal",
-        "macro_fed_rates",
-        "regulation_policy",
-        "sector_flow",
-        "insider_or_whale",
-        "product_or_tech",
-        "management_change",
-        "sentiment",
-        "unknown",
-    ]
-    share: float = Field(ge=0, le=1)
+class MarketSnapshot(BaseModel):
+    asset: str
+    kind: Literal["stock", "crypto"]
+    price: float
+    change_pct: float
+    volume_ratio: float | None = None
+    market_cap: float | None = None
+    history_days: int = Field(ge=1)
+
+
+class NewsItem(BaseModel):
+    title: str
+    publisher: str
+    url: str
+    published: str
     summary: str
-    evidence: list[Evidence]
 
 
-class Dimension(BaseModel):
-    score: int = Field(ge=0, le=100)
-    confidence: int = Field(ge=0, le=100)
-    notes: str
-    evidence: list[Evidence]
+class MemoryUsed(BaseModel):
+    bank_id: str
+    recalled_count: int = Field(ge=0)
+    patterns: list[str]
 
 
-class Person(BaseModel):
-    name: str
-    role: str
-    since: str
-    dimensions: dict[str, Dimension]
-
-
-class PromiseLedger(BaseModel):
-    total: int = Field(ge=0)
-    delivered: int = Field(ge=0)
-    missed: int = Field(ge=0)
-    pending: int = Field(ge=0)
-    items: list[str]
-
-
-class Leadership(BaseModel):
-    overall_grade: str
-    people: list[Person]
-    promise_ledger: PromiseLedger
-    data_gaps: list[str]
-
-
-class ImpliedRequirements(BaseModel):
-    target_price: float = Field(gt=0)
-    implied_market_cap: float = Field(gt=0)
-    current_market_cap: float = Field(gt=0)
-    gap_multiple: float = Field(gt=0)
-    assumptions: list[str]
-
-
-class Condition(BaseModel):
+class Driver(BaseModel):
     category: str
-    description: str
-    status: Literal["not_started", "in_progress", "achieved", "at_risk"]
+    probability: float = Field(ge=0, le=1)
+    explanation: str
     evidence: list[Evidence]
-    last_updated: str
 
 
-class Roadmap(BaseModel):
+class DeepResearch(BaseModel):
+    company: str
+    sector: str
+    macro: str
+
+
+class LeadershipAssessment(BaseModel):
+    people: list[str]
+    prior_track_record: str
+    execution_vs_promises: str
+    capital_allocation: str
+    governance_and_alignment: str
+    evidence_gaps: list[str]
+    evidence: list[Evidence]
+
+
+class RoadmapCondition(BaseModel):
+    condition: str
+    status: Literal["not_started", "in_progress", "achieved", "at_risk"]
+    why_it_matters: str
+    evidence: list[Evidence]
+
+
+class SuccessRoadmap(BaseModel):
     success_definition: str
-    implied_requirements: ImpliedRequirements
-    conditions: list[Condition]
-    precedents: list[str]
-    scenarios: dict[str, str]
+    required_conditions: list[RoadmapCondition]
+    bull_case: str
+    base_case: str
+    bear_case: str
     kill_conditions: list[str]
 
 
-class Confidence(BaseModel):
+class ConfidenceReport(BaseModel):
     score: int = Field(ge=0, le=100)
+    signals_available: int = Field(ge=0)
+    signals_total: int = Field(ge=1)
+    regime: str
     groups: dict[str, int]
     explanation: str
-    signal_count: int = Field(default=0, ge=0)
-    available_signals: int = Field(default=0, ge=0)
-    regime: str = "indeterminate"
-    audit_trail: list[str] = Field(default_factory=list)
+    audit: list[str]
 
 
-class History(BaseModel):
-    cases: list[str]
-    n: int = Field(ge=0)
-    summary: str
+class HistoryReport(BaseModel):
+    recalled_patterns: list[str]
+    sample_size: int = Field(ge=0)
+    limitation: str
 
 
 class FactsVsReality(BaseModel):
-    reported: str
-    market_view: str
-    verdict: str
-    priced_in: bool
-
-
-class MemoryItem(BaseModel):
-    type: str
-    id: str
-    summary: str
+    reported_facts: str
+    market_narrative: str
+    gap: str
+    evidence: list[Evidence]
 
 
 class Report(BaseModel):
     asset: str
-    move: dict[str, float]
-    drivers: list[Driver]
-    deep_research: dict[str, str]
-    leadership: Leadership
-    roadmap: Roadmap
-    confidence: Confidence
-    history: History
+    generated_at: str
+    snapshot: MarketSnapshot
+    primary_drivers: list[Driver]
+    deep_research: DeepResearch
+    leadership: LeadershipAssessment
+    roadmap: SuccessRoadmap
+    confidence: ConfidenceReport
+    history: HistoryReport
     facts_vs_reality: FactsVsReality
-    since_last_time: list[str]
-    memory_used: list[MemoryItem]
-    thesis_check: str | None = None
+    memory_used: MemoryUsed
+    live_news: list[NewsItem]
     disclaimer: Literal["Research tool, not financial advice."] = (
         "Research tool, not financial advice."
     )

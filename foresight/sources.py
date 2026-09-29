@@ -1,113 +1,108 @@
-"""Live, free-first evidence sources with explicit failure states."""
-
 from __future__ import annotations
 
-import os
+import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-import aiohttp
+import yfinance as yf
+from pycoingecko import CoinGeckoAPI
 
-from .models import Evidence
+from .models import Evidence, MarketSnapshot, NewsItem
 
 
 @dataclass(slots=True)
-class SourceBundle:
+class LiveResearchData:
+    snapshot: MarketSnapshot
     evidence: list[Evidence]
-    source_status: dict[str, str]
-    price: float | None = None
-    market_cap: float | None = None
+    news: list[NewsItem]
 
 
-@dataclass(slots=True)
-class PriceResult:
-    price: float | None
-    market_cap: float | None
-    status: str
+class LiveMarketSources:
+    """Acquire live stock or crypto context; no fixture data is used."""
 
+    async def gather(self, asset: str) -> LiveResearchData:
+        normalized = asset.strip().upper()
+        if normalized.startswith("CRYPTO:"):
+            return await asyncio.to_thread(self._crypto, normalized.removeprefix("CRYPTO:"))
+        return await asyncio.to_thread(self._stock, normalized)
 
-class MarketSources:
-    """Fetch market context without allowing an unavailable source to invent data."""
-
-    def __init__(self) -> None:
-        self._user_agent = os.getenv("FORESIGHT_SEC_USER_AGENT", "Foresight research contact@example.com")
-
-    async def gather(self, asset: str) -> SourceBundle:
-        evidence: list[Evidence] = []
-        statuses: dict[str, str] = {}
-        price: float | None = None
-        market_cap: float | None = None
-        timeout = aiohttp.ClientTimeout(total=12)
-        headers = {"User-Agent": self._user_agent, "Accept": "application/json"}
-        async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
-            price_result = await self._price(session, asset)
-            price, market_cap = price_result.price, price_result.market_cap
-            statuses["market_price"] = price_result.status
-            filings, status = await self._sec_filings(session, asset)
-            evidence.extend(filings)
-            statuses["sec_filings"] = status
-        return SourceBundle(evidence=evidence, source_status=statuses, price=price, market_cap=market_cap)
-
-    async def _price(
-        self, session: aiohttp.ClientSession, asset: str
-    ) -> PriceResult:
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{asset.upper()}?range=1mo&interval=1d"
-        try:
-            async with session.get(url) as response:
-                if response.status != 200:
-                    return PriceResult(None, None, f"unavailable:{response.status}")
-                payload: dict[str, Any] = await response.json()
-            result = payload["chart"]["result"][0]
-            meta = result["meta"]
-            return PriceResult(meta.get("regularMarketPrice"), meta.get("marketCap"), "ok")
-        except (aiohttp.ClientError, KeyError, IndexError, TypeError, ValueError) as exc:
-            return PriceResult(None, None, f"unavailable:{type(exc).__name__}")
-
-    async def _sec_filings(
-        self, session: aiohttp.ClientSession, asset: str
-    ) -> tuple[list[Evidence], str]:
-        ticker_url = "https://www.sec.gov/files/company_tickers.json"
-        try:
-            async with session.get(ticker_url) as response:
-                if response.status != 200:
-                    return [], f"unavailable:{response.status}"
-                tickers: dict[str, dict[str, Any]] = await response.json()
-            match = next(
-                (entry for entry in tickers.values() if entry.get("ticker", "").upper() == asset.upper()),
-                None,
+    def _stock(self, ticker_symbol: str) -> LiveResearchData:
+        ticker = yf.Ticker(ticker_symbol)
+        history = ticker.history(period="1y", auto_adjust=False)
+        if history.empty or "Close" not in history or "Volume" not in history:
+            raise ValueError(f"No live market history was returned for {ticker_symbol}.")
+        close = history["Close"].dropna()
+        volume = history["Volume"].dropna()
+        latest_price = float(close.iloc[-1])
+        previous_price = float(close.iloc[-2]) if len(close) > 1 else latest_price
+        average_volume = float(volume.tail(30).mean())
+        latest_volume = float(volume.iloc[-1])
+        info: dict[str, Any] = ticker.fast_info
+        market_cap = info.get("market_cap")
+        snapshot = MarketSnapshot(
+            asset=ticker_symbol,
+            kind="stock",
+            price=latest_price,
+            change_pct=((latest_price / previous_price) - 1) * 100,
+            volume_ratio=latest_volume / average_volume if average_volume else None,
+            market_cap=float(market_cap) if market_cap else None,
+            history_days=len(close),
+        )
+        news = [
+            NewsItem(
+                title=str(item.get("title", "Untitled")),
+                publisher=str(item.get("publisher", "Unknown")),
+                url=str(item.get("link", "")),
+                published=str(item.get("providerPublishTime", "")),
+                summary=str(item.get("summary", "")),
             )
-            if match is None:
-                return [], "not_found"
-            cik = str(match["cik_str"]).zfill(10)
-            submissions_url = f"https://data.sec.gov/submissions/CIK{cik}.json"
-            async with session.get(submissions_url) as response:
-                if response.status != 200:
-                    return [], f"unavailable:{response.status}"
-                payload: dict[str, Any] = await response.json()
-            recent = payload["filings"]["recent"]
-            output: list[Evidence] = []
-            for index, form in enumerate(recent["form"]):
-                if form not in {"8-K", "10-Q", "10-K", "DEF 14A", "4"} or len(output) >= 8:
-                    continue
-                accession = recent["accessionNumber"][index].replace("-", "")
-                primary = recent["primaryDocument"][index]
-                filing_date = recent["filingDate"][index]
-                output.append(
-                    Evidence(
-                        source=f"SEC {form}",
-                        url=f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{accession}/{primary}",
-                        date=filing_date or datetime.now(UTC).date().isoformat(),
-                        snippet=f"Recent {form} filing for {asset.upper()}; retrieve the filing before making a claim.",
-                    )
-                )
-            return output, "ok"
-        except (aiohttp.ClientError, KeyError, IndexError, TypeError, ValueError) as exc:
-            return [], f"unavailable:{type(exc).__name__}"
+            for item in ticker.news[:12]
+            if item.get("link")
+        ]
+        evidence = [
+            Evidence(
+                source="Yahoo Finance price history",
+                url=f"https://finance.yahoo.com/quote/{ticker_symbol}",
+                date=datetime.now(UTC).date().isoformat(),
+                snippet=(
+                    f"{ticker_symbol} last price {latest_price:.4f}; one-day move "
+                    f"{snapshot.change_pct:.2f}%; volume ratio {snapshot.volume_ratio or 0:.2f}x."
+                ),
+            )
+        ]
+        evidence.extend(
+            Evidence(
+                source=item.publisher,
+                url=item.url,
+                date=item.published,
+                snippet=item.summary or item.title,
+            )
+            for item in news
+        )
+        return LiveResearchData(snapshot=snapshot, evidence=evidence, news=news)
 
-
-def evidence_as_prompt(evidence: list[Evidence]) -> str:
-    """Create a bounded evidence packet for an optional synthesis model."""
-    return "\n".join(
-        f"[{item.date}] {item.source}: {item.snippet} ({item.url})" for item in evidence[:24]
-    )
+    def _crypto(self, asset: str) -> LiveResearchData:
+        coin_id = asset.lower().replace(" ", "-")
+        data = CoinGeckoAPI().get_coin_by_id(coin_id, localization=False, tickers=False, market_data=True)
+        market = data["market_data"]
+        price = float(market["current_price"]["usd"])
+        change = float(market.get("price_change_percentage_24h", 0))
+        snapshot = MarketSnapshot(
+            asset=f"CRYPTO:{coin_id}",
+            kind="crypto",
+            price=price,
+            change_pct=change,
+            volume_ratio=None,
+            market_cap=float(market["market_cap"]["usd"]),
+            history_days=365,
+        )
+        evidence = [
+            Evidence(
+                source="CoinGecko",
+                url=f"https://www.coingecko.com/en/coins/{coin_id}",
+                date=datetime.now(UTC).date().isoformat(),
+                snippet=f"{coin_id} live USD price {price:.4f}; 24-hour change {change:.2f}%.",
+            )
+        ]
+        return LiveResearchData(snapshot=snapshot, evidence=evidence, news=[])

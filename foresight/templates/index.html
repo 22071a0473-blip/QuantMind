@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QuantMind — Evidence before conviction</title>
+  <style>
+    :root { color-scheme: dark; --bg:#08111f; --card:#101d31; --line:#243752; --ink:#eef4ff; --muted:#91a4bf; --accent:#58e0bd; --warn:#ffca68; }
+    * { box-sizing:border-box; } body { margin:0; font:15px/1.55 Inter,system-ui,sans-serif; color:var(--ink); background:radial-gradient(circle at top,#132845,var(--bg) 48%); }
+    main { max-width:1180px; margin:auto; padding:42px 20px 70px; } header { display:flex; justify-content:space-between; gap:24px; align-items:end; margin-bottom:28px; }
+    h1 { font-size:clamp(2.3rem,6vw,5rem); letter-spacing:-.06em; margin:0; } h2 { margin:0 0 10px; font-size:1.15rem; } h3 { margin:0 0 5px; }
+    .tag { color:var(--accent); font-weight:700; letter-spacing:.12em; text-transform:uppercase; font-size:.72rem; } .lede { color:var(--muted); max-width:620px; }
+    form { display:flex; gap:10px; flex-wrap:wrap; background:rgba(16,29,49,.8); padding:16px; border:1px solid var(--line); border-radius:18px; }
+    input,button { font:inherit; border-radius:10px; border:1px solid var(--line); padding:11px 13px; background:#0b1728; color:var(--ink); } input[name=asset] { min-width:190px; text-transform:uppercase; } button { background:var(--accent); color:#06131b; border:0; font-weight:800; cursor:pointer; }
+    .error { margin:18px 0; padding:14px; border:1px solid #75434b; background:#2a1722; border-radius:12px; color:#ffb4ba; }
+    .hero, .grid { display:grid; grid-template-columns:repeat(12,1fr); gap:14px; margin-top:18px; } .card { background:rgba(16,29,49,.86); border:1px solid var(--line); border-radius:18px; padding:19px; } .span-4 { grid-column:span 4; } .span-6 { grid-column:span 6; } .span-8 { grid-column:span 8; } .span-12 { grid-column:span 12; }
+    .metric { font-size:2rem; font-weight:800; } .muted { color:var(--muted); } .score { color:var(--accent); } .pill { display:inline-block; border:1px solid var(--line); border-radius:99px; padding:3px 9px; margin:3px; color:var(--muted); font-size:.78rem; }
+    ol,ul { padding-left:20px; } li { margin:8px 0; } a { color:var(--accent); } .source { font-size:.8rem; color:var(--muted); border-top:1px solid var(--line); padding-top:8px; margin-top:8px; }
+    @media(max-width:760px) { header { display:block; } .span-4,.span-6,.span-8,.span-12 { grid-column:span 12; } }
+  </style>
+</head>
+<body>
+<main>
+  <header><div><div class="tag">Memory-backed market intelligence</div><h1>QuantMind</h1><p class="lede">A live, evidence-first answer to “why did it move, and what would have to happen next?” Hindsight remembers the pattern; it never replaces evidence.</p></div></header>
+  <form action="/research" method="post">
+    <input name="asset" placeholder="PLTR or CRYPTO:bitcoin" required aria-label="Asset">
+    <input name="target_price" type="number" min="0" step="any" placeholder="Optional scenario price" aria-label="Target price">
+    <button type="submit">Research live →</button>
+  </form>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  {% if report %}
+  <section class="hero">
+    <div class="card span-4"><div class="tag">Live snapshot</div><div class="metric">{{ report.snapshot.asset }}</div><div>${{ "%.4f"|format(report.snapshot.price) }} · {{ "%.2f"|format(report.snapshot.change_pct) }}%</div><p class="muted">{{ report.snapshot.kind }} · {{ report.snapshot.history_days }} history days · {{ report.confidence.regime }}</p></div>
+    <div class="card span-4"><div class="tag">Confidence</div><div class="metric score">{{ report.confidence.score }}/100</div><p>{{ report.confidence.explanation }}</p><p class="muted">{{ report.confidence.signals_available }}/{{ report.confidence.signals_total }} signals available</p></div>
+    <div class="card span-4"><div class="tag">Hindsight memory</div><div class="metric">{{ report.memory_used.recalled_count }}</div><p>patterns recalled from <b>{{ report.memory_used.bank_id }}</b>, then this report was retained.</p></div>
+  </section>
+  <section class="grid">
+    <div class="card span-8"><div class="tag">Factor 1 · Why it moved</div><h2>Ranked catalysts</h2>{% for driver in report.primary_drivers %}<p><b>{{ driver.category }}</b> · {{ "%.0f"|format(driver.probability * 100) }}%<br>{{ driver.explanation }}</p>{% for item in driver.evidence %}<div class="source"><a href="{{ item.url }}" target="_blank">{{ item.source }}</a> · {{ item.snippet }}</div>{% endfor %}{% endfor %}</div>
+    <div class="card span-4"><div class="tag">Factor 4 · Signal audit</div>{% for key,value in report.confidence.groups.items() %}<span class="pill">{{ key }} {{ value }}</span>{% endfor %}{% for line in report.confidence.audit %}<p class="muted">{{ line }}</p>{% endfor %}</div>
+    <div class="card span-6"><div class="tag">Factor 2 · Deep research</div><h3>Company</h3><p>{{ report.deep_research.company }}</p><h3>Sector</h3><p>{{ report.deep_research.sector }}</p><h3>Macro</h3><p>{{ report.deep_research.macro }}</p></div>
+    <div class="card span-6"><div class="tag">Factor 3 · Leadership & board</div><p><b>{{ report.leadership.prior_track_record }}</b></p><p>{{ report.leadership.execution_vs_promises }}</p><p>{{ report.leadership.capital_allocation }}</p><p>{{ report.leadership.governance_and_alignment }}</p>{% for gap in report.leadership.evidence_gaps %}<p class="muted">Gap: {{ gap }}</p>{% endfor %}</div>
+    <div class="card span-12"><div class="tag">Factor 5 · What must happen next</div><h2>{{ report.roadmap.success_definition }}</h2>{% for condition in report.roadmap.required_conditions %}<p><b>{{ condition.status|upper }} · {{ condition.condition }}</b><br>{{ condition.why_it_matters }}</p>{% endfor %}<div class="grid"><div class="card span-4"><h3>Bull</h3>{{ report.roadmap.bull_case }}</div><div class="card span-4"><h3>Base</h3>{{ report.roadmap.base_case }}</div><div class="card span-4"><h3>Bear / kill conditions</h3>{{ report.roadmap.bear_case }}<ul>{% for item in report.roadmap.kill_conditions %}<li>{{ item }}</li>{% endfor %}</ul></div></div></div>
+    <div class="card span-6"><div class="tag">Facts vs reality</div><p><b>Reported facts:</b> {{ report.facts_vs_reality.reported_facts }}</p><p><b>Market narrative:</b> {{ report.facts_vs_reality.market_narrative }}</p><p><b>Gap:</b> {{ report.facts_vs_reality.gap }}</p></div>
+    <div class="card span-6"><div class="tag">History · not hindsight theater</div>{% for pattern in report.history.recalled_patterns %}<p>{{ pattern }}</p>{% else %}<p class="muted">No prior pattern has been retained for this asset yet. This is explicitly not a historical analogue.</p>{% endfor %}<p class="muted">{{ report.history.limitation }}</p></div>
+    <div class="card span-12"><div class="tag">Live sources</div>{% for item in report.live_news %}<div class="source"><a href="{{ item.url }}" target="_blank">{{ item.title }}</a> · {{ item.publisher }} · {{ item.summary }}</div>{% else %}<p class="muted">No news item was returned by the live provider.</p>{% endfor %}</div>
+  </section>
+  <p class="muted">{{ report.disclaimer }} Generated {{ report.generated_at }}.</p>
+  {% endif %}
+</main>
+</body>
+</html>

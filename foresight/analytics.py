@@ -47,6 +47,12 @@ class AnalyticsResult:
     audit_trail: list[str]
 
 
+@dataclass(frozen=True, slots=True)
+class RegimeResult:
+    name: str
+    explanation: str
+
+
 @dataclass(slots=True)
 class InstitutionalAnalytics:
     """Calculate a transparent multi-signal score with missing-data penalties."""
@@ -125,7 +131,7 @@ class InstitutionalAnalytics:
             scores[group] = max(0, min(100, score))
             audit.append(f"{group}: {len(available)}/{len(group_signals)} signals available; score={scores[group]}.")
         overall = round(sum(scores.values()) / len(scores))
-        regime, regime_explanation = self._regime()
+        regime_result = self._regime()
         matches = [
             PatternMatch(
                 pattern="high-volume, catalyst-led relative-strength move",
@@ -135,15 +141,15 @@ class InstitutionalAnalytics:
                 explanation="A comparable outcome is not claimed until the event window is observed and retained.",
             )
         ]
-        audit.append(f"regime={regime}; {regime_explanation}")
+        audit.append(f"regime={regime_result.name}; {regime_result.explanation}")
         audit.append(f"coverage={sum(signal.available for signal in signals)}/{len(signals)} signals.")
         return AnalyticsResult(
             group_scores=scores,
             overall_score=overall,
             signal_count=len(signals),
             available_count=sum(signal.available for signal in signals),
-            regime=regime,
-            regime_explanation=regime_explanation,
+            regime=regime_result.name,
+            regime_explanation=regime_result.explanation,
             pattern_matches=matches,
             audit_trail=audit,
         )
@@ -157,12 +163,21 @@ class InstitutionalAnalytics:
     def _volatility_adjusted_move(self) -> float:
         return max(0.0, min(100.0, 50 + (self.price_move_pct / 3.0 - 1) * 15))
 
-    def _regime(self) -> tuple[str, str]:
+    def _regime(self) -> RegimeResult:
         if self.price_move_pct >= 6 and self.volume_vs_average >= 2:
-            return "catalyst_expansion", "Large move plus abnormal volume suggests information arrival rather than ordinary drift."
+            return RegimeResult(
+                "catalyst_expansion",
+                "Large move plus abnormal volume suggests information arrival rather than ordinary drift.",
+            )
         if self.price_move_pct <= -6 and self.volume_vs_average >= 2:
-            return "catalyst_stress", "Large downside move plus abnormal volume suggests a stress or negative-information regime."
-        return "indeterminate", "The available fixture signals do not establish a stable market regime."
+            return RegimeResult(
+                "catalyst_stress",
+                "Large downside move plus abnormal volume suggests a stress or negative-information regime.",
+            )
+        return RegimeResult(
+            "indeterminate",
+            "The available live signals do not establish a stable market regime.",
+        )
 
     @staticmethod
     def _explanation(name: str, value: float | None) -> str:
