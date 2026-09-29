@@ -2,18 +2,22 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
+import re
 from typing import Any
 
 from groq import AsyncGroq
 
 from .models import Report
 
+logger = logging.getLogger(__name__)
+
 
 class GroqResearcher:
     def __init__(self) -> None:
         self._client = AsyncGroq(api_key=os.environ["GROQ_API_KEY"])
-        self._model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+        self._model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
     async def synthesize(
         self,
@@ -49,15 +53,27 @@ class GroqResearcher:
                 content = response.choices[0].message.content
                 if not content:
                     raise ValueError("Groq returned an empty research response.")
-                payload: dict[str, Any] = json.loads(content)
+                try:
+                    payload: dict[str, Any] = json.loads(content)
+                except json.JSONDecodeError:
+                    markdown_match = re.search(
+                        r"```json\s*(.*?)\s*```",
+                        content,
+                        flags=re.IGNORECASE | re.DOTALL,
+                    )
+                    if markdown_match is None:
+                        raise
+                    payload = json.loads(markdown_match.group(1))
                 return Report.model_validate(payload)
             except (json.JSONDecodeError, ValueError, TypeError) as exc:
                 last_error = exc
+                logger.warning("Groq returned invalid report JSON on attempt %s: %s", attempt + 1, exc)
                 if attempt == 1:
                     user += "\nReturn the complete JSON object again. Do not omit any required field."
                 await asyncio.sleep(2**attempt)
             except Exception as exc:
                 last_error = exc
+                logger.warning("Groq synthesis failed on attempt %s: %s", attempt + 1, exc)
                 await asyncio.sleep(2**attempt)
         deterministic.warning = f"Groq synthesis failed after retries: {last_error}"
         return deterministic

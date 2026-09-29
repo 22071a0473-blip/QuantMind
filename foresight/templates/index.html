@@ -16,7 +16,7 @@
     .hero, .grid { display:grid; grid-template-columns:repeat(12,1fr); gap:14px; margin-top:18px; } .card { background:rgba(16,29,49,.86); border:1px solid var(--line); border-radius:18px; padding:19px; } .span-4 { grid-column:span 4; } .span-6 { grid-column:span 6; } .span-8 { grid-column:span 8; } .span-12 { grid-column:span 12; }
     .metric { font-size:2rem; font-weight:800; } .muted { color:var(--muted); } .score { color:var(--accent); } .pill { display:inline-block; border:1px solid var(--line); border-radius:99px; padding:3px 9px; margin:3px; color:var(--muted); font-size:.78rem; }
     ol,ul { padding-left:20px; } li { margin:8px 0; } a { color:var(--accent); } .source { font-size:.8rem; color:var(--muted); border-top:1px solid var(--line); padding-top:8px; margin-top:8px; }
-    .badge { border:1px solid var(--accent); border-radius:14px; padding:14px; min-width:260px; } .warning { border-color:var(--warn); color:var(--warn); } .toggle { margin-top:14px; } .toggle button { background:#20334d; color:var(--ink); margin-right:6px; } .toggle button.active { background:var(--accent); color:#06131b; }
+    .badge { border:1px solid var(--accent); border-radius:14px; padding:14px; min-width:260px; } .warning { border-color:var(--warn); color:var(--warn); } .toggle { margin-top:14px; } .toggle a.button { display:inline-block; background:#20334d; color:var(--ink); margin-right:6px; border-radius:10px; border:1px solid var(--line); padding:11px 13px; text-decoration:none; } .toggle a.button.active { background:var(--accent); color:#06131b; }
     table { border-collapse:collapse; width:100%; } th,td { text-align:left; padding:9px; border-bottom:1px solid var(--line); } details { margin-top:18px; }
     @media(max-width:760px) { header { display:block; } .span-4,.span-6,.span-8,.span-12 { grid-column:span 12; } .badge { margin-top:20px; } }
   </style>
@@ -34,7 +34,7 @@
   </form>
   {% if error %}<div class="error">{{ error }}</div>{% endif %}
   {% if report %}
-  <div class="toggle"><button class="active" onclick="loadVersion(true)">With Memory ✅</button><button onclick="loadVersion(false)">Without Memory</button><span class="muted">Compare the same live evidence with and without Hindsight recall.</span></div>
+  <div class="toggle"><a href="/research?asset={{ report.asset }}&memory=true" class="button active">With Memory ✅</a><a href="/research?asset={{ report.asset }}&memory=false" class="button">Without Memory</a><span class="muted">Compare the same live evidence with and without Hindsight recall.</span></div>
   <p class="muted">This report used {{ report.memory_used.recalled_count }} recalled patterns and {{ report.memory_used.total_count }} total memories for this ticker.</p>
   {% if report.memory_impact %}<div class="card"><b>Memory Impact:</b> {{ report.memory_impact }}</div>{% endif %}
   {% if report.warning %}<div class="error">{{ report.warning }}</div>{% endif %}
@@ -53,17 +53,5 @@
   <p class="muted">{{ report.disclaimer }} Generated {{ report.generated_at }}.</p>
   {% endif %}
 </main>
-<script>
-async function loadVersion(withMemory) {
-  const ticker = "{{ report.asset if report else '' }}";
-  if (!ticker) return;
-  const response = await fetch(`/api/report/${encodeURIComponent(ticker)}?memory=${withMemory}`);
-  if (!response.ok) { alert("Research request failed: " + await response.text()); return; }
-  const data = await response.json();
-  document.body.dataset.compare = withMemory ? "memory" : "without-memory";
-  window.location.href = `/research?asset=${encodeURIComponent(ticker)}&memory=${withMemory}`;
-  console.info("Comparison result", data);
-}
-</script>
 </body>
 </html>

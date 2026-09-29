@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import re
+from html import escape
 from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .engine import QuantMindEngine
 from .llm import GroqResearcher
@@ -18,11 +20,22 @@ app = FastAPI(title="QuantMind", version="1.1.0")
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
 
-@app.exception_handler(HTTPException)
-async def api_error_handler(request: Request, exc: HTTPException) -> JSONResponse | HTMLResponse:
+@app.exception_handler(StarletteHTTPException)
+async def api_error_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse | HTMLResponse:
     if request.url.path.startswith("/api/"):
         return JSONResponse(status_code=exc.status_code, content={"error": str(exc.detail)})
-    return JSONResponse(status_code=exc.status_code, content={"error": str(exc.detail)})
+    detail = escape(str(exc.detail))
+    return HTMLResponse(
+        status_code=exc.status_code,
+        content=(
+            "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
+            "<title>QuantMind error</title><style>"
+            "body{font:16px system-ui,sans-serif;background:#08111f;color:#eef4ff;"
+            "padding:4rem;max-width:720px;margin:auto}a{color:#58e0bd}"
+            "</style></head><body><h1>QuantMind could not complete that request</h1>"
+            f"<p>{detail}</p><p><a href='/'>Return to QuantMind</a></p></body></html>"
+        ),
+    )
 
 
 def build_engine() -> QuantMindEngine:

@@ -30,14 +30,14 @@ class InstitutionalAnalytics:
         # signals are included because an unobservable signal would overstate coverage.
         definitions = [
             ("price_change_1d", self.features.return_1d, 0.10, "yfinance"),
-            ("price_change_5d", self.features.return_5d, 0.08, "yfinance"),
+            ("price_change_5d", self.features.return_5d, 0.09, "yfinance"),
             ("price_change_20d", self.features.return_20d, 0.08, "yfinance"),
             ("volatility_20d", self.features.volatility_20d, 0.07, "yfinance"),
             ("volume_ratio", self.features.volume_ratio, 0.10, "yfinance"),
             ("drawdown_1y", self.features.drawdown_1y, 0.07, "yfinance"),
             ("momentum_20d", self.features.momentum_20d, 0.08, "yfinance"),
             ("trend_slope_20d", self.features.trend_slope, 0.08, "yfinance"),
-            ("price_vs_sma20", self.features.price_vs_sma20, 0.08, "yfinance"),
+            ("price_vs_sma20", self.features.price_vs_sma20, 0.09, "yfinance"),
             ("price_vs_sma50", self.features.price_vs_sma50, 0.08, "yfinance"),
             ("one_year_range_position", self.features.high_low_position, 0.08, "yfinance"),
             ("news_count", self.features.news_count, 0.08, "yfinance"),

@@ -90,7 +90,7 @@ class HindsightMemory:
             budget="high",
             max_tokens=2500,
         )
-        return response.text
+        return response.text if hasattr(response, "text") else str(response)
 
     async def retain_insight(self, asset: str, insight: str, based_on_count: int) -> None:
         await self._client.aretain(

@@ -42,7 +42,12 @@ class QuantMindEngine:
 
     async def signal_snapshot(self, asset: str) -> AnalyticsResult:
         live = await self._sources.gather(asset)
-        recalled = await self._memory.recall(asset, f"{asset} historical market patterns")
+        query_keywords = (
+            " ".join(item.title for item in live.news[:3])
+            if live.news
+            else f"{live.snapshot.asset} price volume movement catalyst"
+        )
+        recalled = await self._memory.recall(asset, query_keywords)
         return InstitutionalAnalytics(
             features=live.features,
             memory_count=len(recalled.records),
@@ -50,10 +55,15 @@ class QuantMindEngine:
 
     async def research(self, asset: str, memory_enabled: bool = True) -> ResearchResult:
         live = await self._sources.gather(asset)
+        query_keywords = (
+            " ".join(item.title for item in live.news[:3])
+            if live.news
+            else f"{live.snapshot.asset} price volume movement catalyst"
+        )
         recalled = (
             await self._memory.recall(
                 live.snapshot.asset,
-                f"{live.snapshot.asset} moved {live.snapshot.change_pct:.2f}% primary reason Unclassified sector market",
+                query_keywords,
             )
             if memory_enabled
             else RecalledMemory(bank_id=self._memory.bank_id(live.snapshot.asset), records=[], total_count=0)
