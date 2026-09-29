@@ -38,6 +38,12 @@ Frontend (report page + before/after toggle)
      -> Hindsight reflect (every 5 market-event retains)
 ```
 
+The terminal also exposes an explicit async state graph (`/analyze`) for clients that
+need phase-level observability. Its separate confidence audit evaluates 50 parameters
+across market, technical, fundamental, macro, and sentiment vectors. Missing provider
+data is recorded as unavailable rather than converted into invented facts; the legacy
+12-signal `analytics.py` engine remains the report's deterministic compatibility layer.
+
 ## API
 
 - `GET /` — landing page
@@ -47,6 +53,7 @@ Frontend (report page + before/after toggle)
 - `GET /api/signals/{ticker}`
 - `GET /api/reflect/{ticker}?query=...` or `POST`
 - `GET /api/health`
+- `POST /analyze` — typed graph execution with the 50-parameter confidence audit
 
 Crypto uses `CRYPTO:bitcoin`, `CRYPTO:ethereum`, and other CoinGecko IDs.
 
@@ -65,6 +72,7 @@ Crypto uses `CRYPTO:bitcoin`, `CRYPTO:ethereum`, and other CoinGecko IDs.
 ```powershell
 Copy-Item .env.example .env
 # Set HINDSIGHT_API_URL, HINDSIGHT_API_TOKEN, and GROQ_API_KEY in .env.
+# Keep FORESIGHT_DEMO_MODE=false for the live Hindsight demo path.
 uv sync
 uv run uvicorn foresight.app:app --reload
 ```

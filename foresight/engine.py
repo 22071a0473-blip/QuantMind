@@ -34,6 +34,14 @@ class QuantMindEngine:
         self._researcher = researcher
         self._sources = LiveMarketSources()
 
+    @property
+    def sources(self) -> LiveMarketSources:
+        return self._sources
+
+    @property
+    def memory(self) -> HindsightMemory:
+        return self._memory
+
     async def reflect(self, asset: str, query: str) -> str:
         return await self._memory.reflect(asset, query)
 

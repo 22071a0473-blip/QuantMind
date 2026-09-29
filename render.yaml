@@ -13,5 +13,15 @@ services:
         sync: false
       - key: GROQ_MODEL
         value: llama-3.3-70b-versatile
+      - key: HINDSIGHT_BANK_PREFIX
+        value: quantmind-
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: FORESIGHT_CACHE_TTL_SECONDS
+        value: "300"
+      - key: FORESIGHT_LOG_LEVEL
+        value: INFO
+      - key: FORESIGHT_DEMO_MODE
+        value: "false"
       - key: FORESIGHT_SEC_USER_AGENT
         sync: false

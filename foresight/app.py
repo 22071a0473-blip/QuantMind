@@ -8,8 +8,11 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from .agent_graph import AgentGraph, AgentState
+from .confidence_engine import ConfidenceAudit, ConfidenceEngine
 from .engine import QuantMindEngine
 from .llm import GroqResearcher
 from .memory import HindsightMemory
@@ -18,6 +21,20 @@ load_dotenv()
 
 app = FastAPI(title="QuantMind", version="1.1.0")
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
+
+
+class AnalyzeRequest(BaseModel):
+    asset: str = Field(min_length=1, max_length=40)
+    query: str = Field(default="", max_length=500)
+    memory: bool = True
+
+
+class AnalyzeResponse(BaseModel):
+    asset: str
+    phase: str
+    confidence: ConfidenceAudit
+    recalled_count: int
+    errors: list[str]
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -138,6 +155,47 @@ async def report(
     except Exception as exc:
         raise HTTPException(status_code=503, detail="Memory backend unavailable") from exc
     return result.report.model_dump()
+
+
+@app.post("/analyze", response_model=AnalyzeResponse)
+async def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
+    """Run the explicit acquisition/recall/analyze graph for terminal clients."""
+    normalized = validate_ticker(request.asset)
+    engine = build_engine()
+    graph = AgentGraph(engine.sources, engine.memory)
+    state = await graph.run(
+        AgentState(asset=normalized, query=request.query, memory_enabled=request.memory)
+    )
+    if state.phase.value == "failed":
+        raise HTTPException(status_code=503, detail="Research graph failed")
+    observations: dict[str, float | None] = {}
+    if state.live is not None:
+        features = state.live.features
+        observations = {
+            "price_change_1d": features.return_1d,
+            "price_change_5d": features.return_5d,
+            "price_change_20d": features.return_20d,
+            "volume_ratio": features.volume_ratio,
+            "volatility": features.volatility_20d,
+            "drawdown": features.drawdown_1y,
+            "momentum": features.momentum_20d,
+            "trend_slope": features.trend_slope,
+            "sma20_distance": features.price_vs_sma20,
+            "sma50_distance": features.price_vs_sma50,
+            "high_low_position": features.high_low_position,
+            "news_count": features.news_count,
+            "news_recency": 100.0 if features.news_count else None,
+            "event_clarity": 100.0 if features.news_count else 0.0,
+            "memory_precedent": min(100.0, len(state.recalled.records) * 20) if state.recalled else 0.0,
+        }
+    audit = ConfidenceEngine().evaluate(observations)
+    return AnalyzeResponse(
+        asset=normalized,
+        phase=state.phase.value,
+        confidence=audit,
+        recalled_count=len(state.recalled.records) if state.recalled else 0,
+        errors=state.errors,
+    )
 
 
 @app.get("/api/memory/{ticker}")
