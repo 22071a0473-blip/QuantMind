@@ -1,0 +1,1 @@
+"""Foresight research analyst."""
