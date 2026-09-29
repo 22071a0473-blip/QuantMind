@@ -174,7 +174,9 @@ class QuantMindEngine:
             live.snapshot.change_pct,
             primary_reason,
         )
-        report.memory_used.total_count = total
+        # Hindsight indexing is asynchronous; keep the demo-visible seeded
+        # precedent count while the newly retained report becomes searchable.
+        report.memory_used.total_count = max(total, precedent.count)
 
         if total > 0 and total % 5 == 0:
             insight = await self._memory.reflect(

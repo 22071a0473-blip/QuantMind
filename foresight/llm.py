@@ -75,8 +75,8 @@ class GroqResearcher:
                 last_error = exc
                 logger.warning("Groq synthesis failed on attempt %s: %s", attempt + 1, exc)
                 await asyncio.sleep(2**attempt)
-        deterministic.warning = f"Groq synthesis failed after retries: {last_error}"
-        return deterministic
+        deterministic_report.warning = f"Groq synthesis failed after retries: {last_error}"
+        return deterministic_report
 
     @staticmethod
     def _normalize_report(payload: dict[str, Any], deterministic_report: Report) -> Report:
