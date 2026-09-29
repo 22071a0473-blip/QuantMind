@@ -202,47 +202,6 @@ POST /analyze
 GET  /docs
 ```
 
-## Judging criteria
-
-| Criterion | QuantMind evidence |
-|---|---|
-| **Innovation — 30%** | A research workflow that turns repeated market events into inspectable precedents rather than a generic chat response. |
-| **Hindsight Memory — 25%** | Direct `recall`, `retain`, and `reflect` usage, asset-specific banks, historical precedent, and a visible memory comparison. |
-| **Technical Implementation — 20%** | FastAPI, typed models, live providers, deterministic 12-signal analytics, 50-parameter confidence audit, and an async state graph. |
-| **User Experience — 15%** | A focused terminal UI with five factors, source evidence, memory status, confidence coverage, and a working memory toggle. |
-| **Real-world Impact — 10%** | Reduces the time required to form a sourced first-pass market brief while keeping uncertainty visible. |
-
-## Content submission checklist
-
-The Hindsight content guide asks each participant to publish:
-
-- one public technical article,
-- one social post linking to the article and project, and
-- one team video demonstrating the system.
-
-Keep the story specific and code-backed:
-
-1. Explain the problem of market-research memory loss.
-2. Show the actual `recall` → deterministic analysis → `retain` loop.
-3. Include a real before/after comparison with memory disabled/enabled.
-4. Mention limitations honestly: provider coverage, unavailable fields, and
-   that QuantMind is a research tool rather than financial advice.
-5. Add screenshots of the terminal UI, API response, Hindsight memory bank, and
-   architecture.
-
-Suggested article angle:
-
-> **I stopped asking an LLM why a stock moved and started asking what happened
-> the last time it moved this way.**
-
-Useful publishing references:
-
-- [Hindsight GitHub](https://github.com/vectorize-io/hindsight)
-- [Hindsight docs](https://hindsight.vectorize.io/)
-- [Vectorize: What is agent memory?](https://vectorize.io/what-is-agent-memory)
-- [Self-Driving Agents](https://github.com/vectorize-io/self-driving-agents)
-- [Groq](https://groq.com/)
-
 ## Safety and scope
 
 QuantMind is a research and analysis tool, not financial advice. It does not
