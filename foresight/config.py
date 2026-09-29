@@ -16,7 +16,7 @@ class Settings:
     tavily_api_key: str | None = None
     cache_ttl_seconds: int = 300
     log_level: str = "INFO"
-    demo_mode: bool = False
+    demo_mode: bool = True
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -27,8 +27,12 @@ class Settings:
                     return found
             return default
 
-        def boolean(name: str, default: bool = False) -> bool:
-            return os.getenv(name, str(default)).strip().lower() in {"1", "true", "yes", "on"}
+        def boolean(*names: str, default: bool = False) -> bool:
+            for name in names:
+                found = os.getenv(name)
+                if found is not None:
+                    return found.strip().lower() in {"1", "true", "yes", "on"}
+            return default
 
         return cls(
             hindsight_url=os.getenv("HINDSIGHT_API_URL", "http://localhost:8888").strip(),
@@ -39,7 +43,7 @@ class Settings:
             tavily_api_key=os.getenv("TAVILY_API_KEY") or None,
             cache_ttl_seconds=max(0, int(value("FORESIGHT_CACHE_TTL_SECONDS", "FORESIGHT_CACHE_TTL", default="300"))),
             log_level=value("FORESIGHT_LOG_LEVEL", "LOG_LEVEL", default="INFO").strip().upper(),
-            demo_mode=boolean("FORESIGHT_DEMO_MODE"),
+            demo_mode=boolean("FORESIGHT_DEMO_MODE", "DEMO_MODE", default=True),
         )
 
 

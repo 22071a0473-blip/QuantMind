@@ -36,3 +36,17 @@ def test_precedent_extracts_retained_report_event() -> None:
     assert precedent.count == 1
     assert precedent.moves[0].date == "2026-09-25"
     assert precedent.moves[0].reason == "Contract"
+
+
+def test_precedent_extracts_seeded_thesis_outcome() -> None:
+    record = MemoryRecord(
+        text=(
+            '{"generated_at":"2026-09-25","snapshot":{"change_pct":18},'
+            '"factor_1_why_it_moved":[{"category":"DoD AI TITAN Contract Win"}],'
+            '"memory_thesis":{"outcome":"+18% over 30 days"}}'
+        ),
+        date=None,
+    )
+    precedent = summarize_precedent("PLTR", [record])
+    assert precedent.moves[0].reason == "DoD AI TITAN Contract Win"
+    assert precedent.moves[0].outcome == "+18% over 30 days"

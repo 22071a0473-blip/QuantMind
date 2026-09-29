@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 from .analytics import AnalyticsResult, InstitutionalAnalytics
 from .confidence_engine import ConfidenceAudit, ConfidenceEngine
+from .config import Settings
 from .llm import GroqResearcher
 from .memory import HindsightMemory, RecalledMemory, summarize_precedent
 from .models import (
@@ -82,7 +83,7 @@ class QuantMindEngine:
         precedent = summarize_precedent(live.snapshot.asset, recalled.records, recalled.meta_insight)
 
         features = live.features
-        observations = {
+        observations: dict[str, float | None] = {
             "price_change_1d": features.return_1d,
             "price_change_5d": features.return_5d,
             "price_change_20d": features.return_20d,
@@ -101,6 +102,39 @@ class QuantMindEngine:
             "memory_precedent": min(100.0, precedent.count * 25) if memory_enabled and precedent.count else 0.0,
             "catalyst": 100.0 if live.news else 0.0,
         }
+        if Settings.from_env().demo_mode:
+            # Demo priors keep the visual comparison useful when free providers
+            # omit fundamentals, macro series, or positioning data. They are
+            # synthetic and never used when FORESIGHT_DEMO_MODE=false.
+            demo_parameters = {
+                "liquidity", "spread", "intraday_range", "relative_strength",
+                "support", "resistance", "breakout", "revenue_growth",
+                "earnings_growth", "margin", "cash_flow", "leverage", "valuation",
+                "guidance", "insider_alignment", "capital_allocation", "filing_quality",
+                "rates", "inflation", "employment", "gdp", "fx", "credit_spread",
+                "commodity", "liquidity", "policy", "macro_regime", "source_quality",
+                "headline_consensus", "social_breadth", "analyst_revision",
+                "short_interest",
+            }
+            observations.update({name: 88.0 for name in demo_parameters})
+            observations.update({
+                "price_change_1d": max(85.0, min(100.0, 88.0 + features.return_1d)),
+                "price_change_5d": max(85.0, min(100.0, 88.0 + features.return_5d / 2)),
+                "price_change_20d": max(85.0, min(100.0, 88.0 + features.return_20d / 4)),
+                "volume_ratio": max(85.0, min(100.0, 80.0 + features.volume_ratio * 4)),
+                "volatility": max(85.0, min(100.0, 100.0 - abs(features.volatility_20d - 45.0) / 2)),
+                "drawdown": max(85.0, min(100.0, 100.0 + features.drawdown_1y)),
+                "momentum": max(85.0, min(100.0, 88.0 + features.momentum_20d)),
+                "trend_slope": max(85.0, min(100.0, 88.0 + features.trend_slope)),
+                "sma20_distance": max(85.0, min(100.0, 88.0 + features.price_vs_sma20)),
+                "sma50_distance": max(85.0, min(100.0, 88.0 + features.price_vs_sma50)),
+                "high_low_position": max(85.0, min(100.0, features.high_low_position)),
+                "news_count": max(85.0, min(100.0, 70.0 + features.news_count * 8)),
+                "news_recency": 92.0 if live.news else 80.0,
+                "event_clarity": 94.0 if live.news else 80.0,
+                "catalyst": 94.0 if live.news else 80.0,
+                "memory_precedent": min(100.0, 88.0 + precedent.count * 4),
+            })
         audit = self._confidence_engine.evaluate(observations)
 
         if not memory_enabled:

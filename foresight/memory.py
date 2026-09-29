@@ -85,19 +85,29 @@ class HindsightMemory:
             meta_insight=meta_insight,
         )
 
-    async def retain(self, asset: str, report_json: str, price_change: float, primary_reason: str) -> int:
+    async def retain(
+        self,
+        asset: str,
+        report_json: str,
+        price_change: float,
+        primary_reason: str,
+        metadata: dict[str, str] | None = None,
+    ) -> int:
         bank_id = self.bank_id(asset)
         await self._ensure_bank(bank_id)
+        retention_metadata = {
+            "type": "market_event",
+            "generated_at": datetime.now(UTC).date().isoformat(),
+            "price_change": f"{price_change:.6f}",
+            "primary_reason": primary_reason,
+        }
+        if metadata:
+            retention_metadata.update(metadata)
         await self._client.aretain(
             bank_id=bank_id,
             content=report_json,
             context="QuantMind market event and evidence-grounded report.",
-            metadata={
-                "type": "market_event",
-                "generated_at": datetime.now(UTC).date().isoformat(),
-                "price_change": f"{price_change:.6f}",
-                "primary_reason": primary_reason,
-            },
+            metadata=retention_metadata,
         )
         response = await self._client.alist_memories(bank_id=bank_id, type="market_event", limit=1)
         return response.total
@@ -147,12 +157,14 @@ def summarize_precedent(
             snapshot = payload["snapshot"]
             drivers = payload.get("factor_1_why_it_moved", [])
             reason = drivers[0]["category"] if drivers else "Unclassified"
+            thesis = payload.get("memory_thesis", {})
             date = str(payload.get("generated_at", record.date or "unknown"))[:10]
             moves.append(
                 PrecedentMove(
                     date=date,
                     price_change=float(snapshot["change_pct"]),
                     reason=reason,
+                    outcome=thesis.get("outcome"),
                     follow_through_5d=None,
                     source=SourceCitation(
                         source_type="memory",

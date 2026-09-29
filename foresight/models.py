@@ -109,6 +109,7 @@ class PrecedentMove(BaseModel):
     date: str
     price_change: float
     reason: str
+    outcome: str | None = None
     follow_through_5d: float | None = None
     source: SourceCitation
 
