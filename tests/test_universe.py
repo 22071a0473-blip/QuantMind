@@ -7,6 +7,19 @@ def test_search_prioritizes_exact_symbol() -> None:
     assert result.total >= 1
 
 
+def test_required_phase_one_queries() -> None:
+    expected = {
+        "apple": "AAPL",
+        "meta plat": "META",
+        "berkshire": "BRK-B",
+        "nvidia": "NVDA",
+        "tesla": "TSLA",
+        "BRK-B": "BRK-B",
+    }
+    for query, symbol in expected.items():
+        assert search_universe(query).results[0].symbol == symbol
+
+
 def test_search_matches_company_alias_and_filters_kind() -> None:
     result = search_universe("palantir")
     assert [asset.symbol for asset in result.results] == ["PLTR"]

@@ -1,0 +1,16 @@
+[
+  {"symbol":"AAPL","name":"Apple","kind":"stock","sector":"Information Technology","industry":"Technology Hardware, Storage & Peripherals","cik":"0000320193","aliases":["apple"]},
+  {"symbol":"META","name":"Meta Platforms","kind":"stock","sector":"Communication Services","industry":"Interactive Media & Services","cik":"0001326801","aliases":["facebook","meta platforms"]},
+  {"symbol":"BRK-B","name":"Berkshire Hathaway Class B","kind":"stock","sector":"Financials","industry":"Multi-Sector Holdings","cik":"0001067983","aliases":["berkshire","berkshire hathaway"]},
+  {"symbol":"NVDA","name":"NVIDIA","kind":"stock","sector":"Information Technology","industry":"Semiconductors","cik":"0001045810","aliases":["nvidia"]},
+  {"symbol":"TSLA","name":"Tesla","kind":"stock","sector":"Consumer Discretionary","industry":"Automobiles","cik":"0001318605","aliases":["tesla"]},
+  {"symbol":"PLTR","name":"Palantir Technologies","kind":"stock","sector":"Information Technology","industry":"IT Services","cik":"0001321655","aliases":["palantir"]},
+  {"symbol":"CRWD","name":"CrowdStrike","kind":"stock","sector":"Information Technology","industry":"Systems Software","cik":"0001535527","aliases":["crowdstrike"]},
+  {"symbol":"MSFT","name":"Microsoft","kind":"stock","sector":"Information Technology","industry":"Systems Software","cik":"0000789019","aliases":["microsoft"]},
+  {"symbol":"GOOGL","name":"Alphabet","kind":"stock","sector":"Communication Services","industry":"Interactive Media & Services","cik":"0001652044","aliases":["google","alphabet"]},
+  {"symbol":"QQQ","name":"Invesco QQQ Trust","kind":"etf","sector":"Broad Market","industry":"Exchange Traded Fund","cik":null,"aliases":["nasdaq"]},
+  {"symbol":"SPY","name":"SPDR S&P 500 ETF Trust","kind":"etf","sector":"Broad Market","industry":"Exchange Traded Fund","cik":null,"aliases":["sp500","s&p 500"]},
+  {"symbol":"CRYPTO:bitcoin","name":"Bitcoin","kind":"crypto","sector":"Digital Assets","industry":"Layer 1","cik":null,"aliases":["btc","bitcoin"]},
+  {"symbol":"CRYPTO:ethereum","name":"Ethereum","kind":"crypto","sector":"Digital Assets","industry":"Layer 1","cik":null,"aliases":["eth","ethereum"]},
+  {"symbol":"CRYPTO:ondo","name":"Ondo","kind":"crypto","sector":"Digital Assets","industry":"Tokenized Assets","cik":null,"aliases":["ondo","ondo finance"]}
+]

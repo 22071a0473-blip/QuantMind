@@ -178,6 +178,20 @@ uv run uvicorn quantmind.app:app --reload --port 8000
 
 Open <http://127.0.0.1:8000>.
 
+### Web terminal
+
+The Phase 1 React terminal lives in `web/` and calls the typed FastAPI search
+endpoints:
+
+```powershell
+npm --prefix web install
+npm --prefix web run dev
+```
+
+Press **Ctrl+K** to open the command palette. It searches with a 150 ms
+debounce, groups results by asset kind, and links to the stock and memory
+routes.
+
 ## Research workflow
 
 1. Run `PLTR`, `CRWD`, or `CRYPTO:bitcoin` with **With Memory**.
