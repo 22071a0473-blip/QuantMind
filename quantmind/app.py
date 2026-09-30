@@ -6,10 +6,11 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Form, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.staticfiles import StaticFiles
 
 from .agent_graph import AgentGraph, AgentState
 from .confidence_engine import ConfidenceAudit, ConfidenceEngine
@@ -22,6 +23,11 @@ load_dotenv()
 
 app = FastAPI(title="QuantMind", version="1.1.0")
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
+_WEB_DIST = Path(__file__).resolve().parent.parent / "web-dist"
+if not _WEB_DIST.is_dir():
+    _WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
+if _WEB_DIST.is_dir():
+    app.mount("/assets", StaticFiles(directory=_WEB_DIST / "assets"), name="web-assets")
 
 
 class AnalyzeRequest(BaseModel):
@@ -72,7 +78,24 @@ def validate_ticker(ticker: str) -> str:
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request) -> HTMLResponse:
+    if (_WEB_DIST / "index.html").is_file():
+        return FileResponse(_WEB_DIST / "index.html", media_type="text/html")
     return templates.TemplateResponse(request=request, name="index.html", context={"report": None, "error": None})
+
+
+@app.get("/stock/{symbol:path}", response_class=HTMLResponse)
+async def stock_page(symbol: str) -> HTMLResponse:
+    del symbol
+    if (_WEB_DIST / "index.html").is_file():
+        return FileResponse(_WEB_DIST / "index.html", media_type="text/html")
+    raise HTTPException(status_code=404, detail="Web application is not built")
+
+
+@app.get("/memory", response_class=HTMLResponse)
+async def memory_page() -> HTMLResponse:
+    if (_WEB_DIST / "index.html").is_file():
+        return FileResponse(_WEB_DIST / "index.html", media_type="text/html")
+    raise HTTPException(status_code=404, detail="Web application is not built")
 
 
 @app.post("/research", response_class=HTMLResponse)
@@ -130,9 +153,15 @@ async def research_get(
 
 
 @app.get("/api/health")
-async def health() -> dict[str, str]:
+async def health() -> dict[str, str | int]:
     build_engine()
-    return {"status": "ok", "service": "quantmind", "memory": "hindsight-cloud", "llm": "groq"}
+    return {
+        "status": "ok",
+        "service": "quantmind",
+        "memory": "hindsight-cloud",
+        "llm": "groq",
+        "universe_size": len(list_universe()),
+    }
 
 
 @app.get("/api/memory/status")

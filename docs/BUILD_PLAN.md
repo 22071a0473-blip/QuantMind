@@ -30,6 +30,14 @@ presenting synthetic data as fact.
 
 ## Later phases
 
+### Phase 3 — historical event memory
+
+- 3.1 Use one global `quantmind-events` bank with deterministic document IDs.
+- 3.2 Classify source-backed price events into a stable event taxonomy.
+- 3.3 Backfill events with a resumable, dry-run-capable script.
+- Verify the bank with `scripts/verify_memory.py`.
+- Do not run the full backfill until the dry-run and offline tests pass.
+
 Future phases add source-backed filings, macro, sector, flows, correlations,
 historical backtests, and deeper Hindsight pattern evaluation. Do not implement
 those phases while completing Phase 1.

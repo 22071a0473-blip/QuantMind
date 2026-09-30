@@ -1,0 +1,6 @@
+ticker,date,type,headline,source_url
+CRM,2023-01-04,layoffs_restructuring,Salesforce announced a workforce reduction of about 10 percent,https://www.sec.gov/Archives/edgar/data/1108524/000110852423000004/crm-20230104.htm
+META,2022-11-09,layoffs_restructuring,Meta announced a company-wide workforce reduction,https://about.fb.com/news/2022/11/meta-company-wide-layoffs/
+META,2023-03-14,layoffs_restructuring,Meta announced a further round of workforce reductions,https://about.fb.com/news/2023/03/meta-company-wide-layoffs-update/
+AMZN,2023-01-04,layoffs_restructuring,Amazon announced plans to eliminate more than 18000 roles,https://www.aboutamazon.com/news/company-news/amazon-layoffs
+MSFT,2023-01-18,layoffs_restructuring,Microsoft announced a workforce reduction affecting approximately 10000 roles,https://blogs.microsoft.com/blog/2023/01/18/focusing-on-our-short-and-long-term-opportunity/

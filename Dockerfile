@@ -19,6 +19,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
 COPY quantmind ./quantmind
+COPY data ./data
 COPY --from=web-build /web/dist ./web-dist
 
 EXPOSE 10000

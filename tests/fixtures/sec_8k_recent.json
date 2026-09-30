@@ -1,0 +1,25 @@
+{
+  "filings": {
+    "recent": {
+      "form": ["8-K", "8-K", "10-Q"],
+      "filingDate": ["2025-01-15", "2025-02-20", "2025-03-01"],
+      "accessionNumber": ["0001234567-25-000001", "0001234567-25-000002", "0001234567-25-000003"],
+      "primaryDocument": ["contract.htm", "leadership.htm", "quarterly.htm"],
+      "items": ["1.01,9.01", "5.02", ""],
+      "files": [
+        {"name": "CIK0001234567-2024.json", "filingFrom": "2024-01-01", "filingTo": "2024-12-31"}
+      ]
+    }
+  },
+  "older": {
+    "filings": {
+      "recent": {
+        "form": ["8-K"],
+        "filingDate": ["2024-01-04"],
+        "accessionNumber": ["0001234567-24-000010"],
+        "primaryDocument": ["restructuring.htm"],
+        "items": ["2.05"]
+      }
+    }
+  }
+}

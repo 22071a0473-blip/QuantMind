@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,6 +14,7 @@ from rapidfuzz.fuzz import WRatio
 
 AssetKind = Literal["stock", "etf", "crypto"]
 _DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "universe.json"
+logger = logging.getLogger(__name__)
 
 
 class UniverseAsset(BaseModel):
@@ -23,6 +25,14 @@ class UniverseAsset(BaseModel):
     industry: str | None = None
     cik: str | None = None
     aliases: list[str] = Field(default_factory=list)
+    in_sp100: bool = False
+    memory_event_count: int = 0
+    search_terms: tuple[str, ...] = ()
+
+    def model_post_init(self, __context: object) -> None:
+        if not self.search_terms:
+            terms = (self.symbol, self.name, *self.aliases)
+            object.__setattr__(self, "search_terms", tuple(term.casefold() for term in terms))
 
 
 class SearchResponse(BaseModel):
@@ -35,7 +45,8 @@ def _load_assets() -> tuple[UniverseAsset, ...]:
     try:
         payload = json.loads(_DATA_PATH.read_text(encoding="utf-8"))
         return tuple(UniverseAsset.model_validate(item) for item in payload)
-    except (OSError, json.JSONDecodeError, ValueError):
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        logger.error("UNIVERSE LOAD FAILED: unable to load %s: %s", _DATA_PATH, exc)
         return ()
 
 
@@ -58,8 +69,8 @@ def search_universe(query: str, limit: int = 20) -> SearchResponse:
         return SearchResponse(query=query, results=[], total=0)
     ranked: list[RankedAsset] = []
     for asset in UNIVERSE:
-        ticker = asset.symbol.lower()
-        names = [asset.name.lower(), *(alias.lower() for alias in asset.aliases)]
+        ticker = asset.symbol.casefold()
+        names = asset.search_terms
         score = 0
         if ticker == normalized:
             score = 500
@@ -75,5 +86,5 @@ def search_universe(query: str, limit: int = 20) -> SearchResponse:
             if score < 35:
                 continue
         ranked.append(RankedAsset(score, asset))
-    ranked.sort(key=lambda item: (-item.score, item.asset.symbol))
+    ranked.sort(key=lambda item: (-item.score, not item.asset.in_sp100, item.asset.symbol))
     return SearchResponse(query=query, results=[item.asset for item in ranked[:limit]], total=len(ranked))
