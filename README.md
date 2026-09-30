@@ -1,227 +1,328 @@
-# QuantMind Terminal
+# QuantMind
 
-> **Why did this asset move, and what does history say about the next move?**
+> **Evidence-grounded market research for understanding why an asset moved.**
 
-QuantMind is a memory-backed market research terminal for stocks, ETFs, and
-crypto assets. It combines live market data, deterministic signal analysis,
-Groq narrative synthesis, and Vectorize Hindsight memory into a structured
-five-factor research memo.
+QuantMind is a research terminal for equities, ETFs, and crypto. It combines
+live market data, source-backed event history, deterministic analytics, and
+Vectorize Hindsight memory to produce a structured research brief.
 
-It is deliberately not a chatbot. The output is an auditable research artifact:
-the live snapshot and citations show what is known now, the deterministic
-confidence layer shows how the score was calculated, and Hindsight shows which
-past observations were recalled.
+QuantMind is designed to answer a research question, not to place trades:
 
-## The problem
+> What changed, what evidence supports that explanation, and what happened the
+> last time a similar catalyst appeared?
 
-Understanding a large move usually requires stitching together price action,
-volume, news, sector context, macro conditions, company history, and previous
-market reactions. A stateless LLM may summarize today's headlines, but it does
-not automatically remember how a similar catalyst behaved in the same asset.
+It is a research tool, not financial advice or a prediction guarantee.
 
-QuantMind compresses that workflow into a repeatable report while keeping
-evidence and uncertainty visible. It does not promise a price prediction and it
-does not replace investment advice.
+## What QuantMind does
 
-## What the report contains
+A report is organized into five factors:
 
-Every research run produces five consistent factors:
+1. **Why the asset moved** — price, volume, market context, and available
+   catalyst evidence.
+2. **Deep research** — company, sector, macro, and news context, with missing
+   evidence shown explicitly.
+3. **Confidence** — a deterministic confidence score, coverage percentage,
+   regime, signal groups, and a 50-parameter audit.
+4. **Historical precedent** — related observations recalled from Hindsight,
+   including source-backed SEC and market-event records.
+5. **Facts versus narrative** — reported facts, current market interpretation,
+   and the gap between them.
 
-1. **Why it moved** — a catalyst classification grounded in live news and
-   price/volume evidence.
-2. **Deep research** — company, sector, macro, and news context, with
-   insufficient evidence called out instead of invented.
-3. **Confidence meter** — a deterministic score, coverage percentage, regime,
-   vector groups, and signal audit.
-4. **Historical precedent** — similar prior reports recalled from the asset's
-   Hindsight memory bank.
-5. **Facts vs. reality** — reported evidence, current narrative, and the gap
-   between them.
+The system also exposes leadership and strategic-opportunity fields when the
+available evidence supports them. Unsupported conclusions remain labeled as
+hypotheses or unavailable rather than being filled with synthetic data.
 
-The report also includes an experimental leadership and success-roadmap section.
-Those fields are explicitly labeled as hypotheses when the available sources do
-not support a factual conclusion.
+## Why memory matters
 
-## Why Hindsight matters
+A normal market brief can summarize today's headlines and still miss the most
+useful question: **what happened when this type of event occurred before?**
+QuantMind retains completed reports and historical event records so later
+research can compare the current situation with prior observations.
 
-Hindsight is the differentiator, not a storage add-on. QuantMind uses the
-official Python client directly:
+The live research loop is:
 
 ```text
-Live market/news context
-        │
-        ├── recall(current headlines and catalyst context)
-        │
-        ▼
-Deterministic confidence + Groq evidence-grounded synthesis
-        │
-        ├── retain(completed research report)
-        └── reflect(periodic pattern summary)
-        │
-        ▼
+Market/news data
+      │
+      ├── recall related reports and event precedents
+      ▼
+Deterministic signals + confidence coverage
+      │
+      ├── Groq evidence-grounded synthesis
+      ├── retain completed report
+      └── periodic reflect pattern summary
+      ▼
 The next report has historical context
 ```
 
-The memory lifecycle is:
+Memory-enabled and memory-disabled report modes are available in the UI. The
+memory-disabled mode is a comparison baseline: it skips historical recall and
+applies a clearly labeled deterministic penalty. It is not a claim that memory
+alone guarantees better returns.
 
-1. **Recall** — the first three live headlines become the semantic query. If
-   there is no news, QuantMind uses an asset/price/volume/catalyst query.
-2. **Analyze** — recalled reports are parsed into historical precedent records
-   and contribute to the memory signal.
-3. **Retain** — the completed report is stored in the asset-specific Hindsight
-   bank.
-4. **Reflect** — every fifth retained market event triggers a Hindsight
-   reflection that is stored as a meta-insight.
-
-The web UI's **With Memory** and **Without Memory** links make this effect
-visible. Memory-off runs skip recall and apply a clearly labeled deterministic
-confidence penalty; this is a comparison baseline, not a claim that confidence
-can be mathematically guaranteed by memory alone.
-
-Learn more from the [Hindsight documentation](https://hindsight.vectorize.io/)
-and the [Hindsight source repository](https://github.com/vectorize-io/hindsight).
+Historical event backfill uses one global Hindsight bank,
+`quantmind-events`, with deterministic document IDs. Re-running the same event
+replaces the same document instead of creating an uncontrolled duplicate.
 
 ## Architecture
 
 ```text
-Jinja2 terminal UI / API client
-              │
-              ▼
-        FastAPI application
-              │
-              ▼
-       QuantMindEngine
-       ┌──────┼─────────┐
-       │      │         │
-   yfinance  Hindsight  Groq
- CoinGecko  recall/    synthesis
-            retain/
-            reflect
-              │
-              ▼
-  12-signal compatibility analytics
-  + separate 50-parameter confidence audit
+React/Vite web terminal
+          │
+          ▼
+FastAPI application
+   ┌──────┼─────────┐
+   │      │         │
+yfinance SEC/     Hindsight
+CoinGecko filings recall/
+         events   retain/reflect
+          │
+          ▼
+Typed event records
+          │
+          ▼
+Deterministic analytics
+          │
+          ▼
+Groq synthesis + research report
 ```
 
-The explicit `/analyze` endpoint also exposes a typed asynchronous state graph
-with acquisition, recall, analysis, completion, and failure phases. The graph
-is dependency-free and does not pretend to be a separate orchestration
-framework.
+The repository contains:
 
-## Deterministic confidence audit
-
-The report's compatibility analytics remains in `quantmind/analytics.py`.
-Alongside it, `quantmind/confidence_engine.py` evaluates 50 auditable
-parameters across five vectors:
-
-- Market
-- Technical
-- Fundamental
-- Macro
-- Sentiment
-
-Missing provider data is recorded as unavailable and lowers coverage; it is not
-silently converted into fabricated facts. The current live provider set
-populates the parameters it can support and leaves the rest explicit for
-future connectors.
-
-## Current integrations
-
-| Layer | Implementation |
+| Area | Purpose |
 |---|---|
-| Web/API | FastAPI, Uvicorn, Jinja2 |
-| Memory | Vectorize Hindsight Python SDK |
-| Synthesis | Async Groq client |
-| Equities/ETFs | yfinance |
-| Crypto | CoinGecko via `CRYPTO:<coin-id>` |
-| Deterministic analysis | Python signal and confidence engines |
-| Runtime | Docker-compatible FastAPI service |
+| `quantmind/` | FastAPI application, analytics, confidence engine, providers, and memory adapters |
+| `web/` | React, Vite, TypeScript, and Tailwind search/research interface |
+| `scripts/build_universe.py` | Builds the searchable equity, ETF, S&P 100, and crypto universe |
+| `scripts/backfill_memory.py` | Dry-run and resumable historical event backfill |
+| `scripts/verify_memory.py` | Inspects records in the `quantmind-events` Hindsight bank |
+| `scripts/probe_hindsight_sdk.py` | Documents the installed Hindsight SDK surface |
+| `data/universe.json` | Generated searchable asset catalog |
+| `data/known_events.csv` | Validated, source-linked curated catalyst labels |
+| `tests/` | Offline parser, analytics, universe, API, and memory-format tests |
+| `docs/` | Build plan and manual validation checklists |
 
-The repository also contains typed boundaries for future macro, sector,
-filings, flows, news, and correlation providers. They report unavailable data
-honestly; they are not fixture data.
+## Data sources
 
-## Run locally
+QuantMind uses provider data when available and reports provider gaps
+explicitly.
+
+| Source | Use |
+|---|---|
+| Yahoo Finance via `yfinance` | Historical prices, volume, financial snapshots, earnings dates, and company metadata |
+| SEC EDGAR | 8-K filings, filing dates, item codes, headlines, and filing URLs |
+| Nasdaq Trader | Cached equity and ETF listings |
+| CoinGecko | Top crypto assets and coin identifiers |
+| Vectorize Hindsight | Long-term memory, recall, retention, and reflection |
+| Groq | Optional evidence-grounded narrative synthesis |
+
+Provider terms, rate limits, and availability apply. SEC requests require a
+real contact identifier in the User-Agent. Curated events are labels only; the
+backfill computes their market returns from price data.
+
+## Quick start
 
 ### Prerequisites
 
-- Python 3.11+
-- A Hindsight Cloud URL and token
+- Python 3.11 or newer
+- [`uv`](https://docs.astral.sh/uv/)
+- Node.js 18 or newer for the web client
+- A Hindsight Cloud URL and API token for memory features
 - A Groq API key for narrative synthesis
 
-### Configure
+### Configure the environment
+
+Run these commands from the repository root:
 
 ```powershell
-# Run from the repository root; .env.example is beside pyproject.toml.
 Copy-Item .env.example .env
 notepad .env
 ```
 
-Set these values in `.env`:
+Minimum configuration:
 
 ```env
 HINDSIGHT_API_URL=https://api.hindsight.vectorize.io
-HINDSIGHT_API_TOKEN=your_rotated_hindsight_token
-GROQ_API_KEY=your_groq_key
+HINDSIGHT_API_TOKEN=replace_with_a_rotated_token
+GROQ_API_KEY=replace_with_your_groq_key
 GROQ_MODEL=llama-3.3-70b-versatile
+QUANTMIND_SEC_USER_AGENT=Your Name contact@example.com
 ```
 
-Never commit `.env`, API keys, or tokens. If a token has ever been pasted into
-chat or a public issue, revoke it and create a new one.
+Never commit `.env`, API keys, or tokens. Revoke any credential that has been
+shared in a chat, issue, screenshot, or public repository.
 
-### Install and start
+### Install dependencies
 
 ```powershell
-uv sync
+uv sync --extra test
+Push-Location web
+npm install
+Pop-Location
+```
+
+### Start the API and web terminal
+
+For the production-style FastAPI service:
+
+```powershell
 uv run uvicorn quantmind.app:app --reload --port 8000
 ```
 
-Open <http://127.0.0.1:8000>.
+Open <http://127.0.0.1:8000>. The FastAPI app serves the built frontend when
+`web-dist/` is present and falls back to `web/dist/` during local development.
 
-### Web terminal
-
-The Phase 1 React terminal lives in `web/` and calls the typed FastAPI search
-endpoints:
+For Vite hot reload in a second terminal:
 
 ```powershell
-npm --prefix web install
-npm --prefix web run dev
+Push-Location web
+npm run dev
+Pop-Location
 ```
 
-Press **Ctrl+K** to open the command palette. It searches with a 150 ms
-debounce, groups results by asset kind, and links to the stock and memory
-routes.
+Press **Ctrl+K** or **Cmd+K** to open the shared search palette. Search supports
+exact ticker, ticker prefix, name prefix, name-token, and fuzzy matches. Results
+are grouped by asset type and crypto results route to
+`/stock/CRYPTO:<coin-id>`.
 
-## Research workflow
+## Build the asset universe
 
-1. Run `PLTR`, `CRWD`, or `CRYPTO:bitcoin` with **With Memory**.
-2. Show the five-factor memo, confidence audit, source links, and Hindsight
-   memory count.
-3. Open the **Without Memory** link for the same asset.
-4. Compare the empty historical-precedent factor and the labeled confidence
-   penalty.
-5. Run the asset again with memory enabled after several retained reports.
-6. Show how the recalled precedent and periodic reflection change the report.
+The generated catalog includes S&P 100 metadata, Nasdaq Trader listings, and
+the top 250 CoinGecko assets. The Nasdaq, SEC, and CoinGecko responses are
+cached and refreshed according to the build script's cache policy.
 
-Useful API calls:
-
-```text
-GET  /api/report/PLTR?memory=true
-GET  /api/report/PLTR?memory=false
-GET  /api/signals/PLTR
-GET  /api/memory/PLTR
-GET  /api/reflect/PLTR?query=What%20patterns%20emerge%3F
-POST /analyze
-GET  /docs
+```powershell
+$env:QUANTMIND_SEC_USER_AGENT = "Your Name contact@example.com"
+uv run python scripts/build_universe.py
 ```
 
-## Safety and scope
+The output is written to `data/universe.json`. Do not hand-edit that generated
+file; rebuild it when provider data changes.
 
-QuantMind is a research and analysis tool, not financial advice. It does not
-guarantee returns, identify illegal insider information, or make autonomous
-trades. Every report includes a disclaimer, and unsupported conclusions should
-remain labeled as insufficient evidence or hypotheses.
+## Historical event memory
+
+The event pipeline stores source-backed events such as:
+
+- contracts and major partnership deals,
+- earnings and earnings surprise classifications,
+- layoffs and restructuring,
+- leadership changes,
+- mergers and acquisitions,
+- cyber incidents,
+- abnormal price moves when no source event explains the move.
+
+Each record contains day-0 return, abnormal return versus SPY, volume ratio,
+and nullable forward 1-, 5-, 20-, and 60-day returns. A missing forward return
+means that enough elapsed market data does not exist; it is never fabricated.
+
+Always run the dry run before any live write:
+
+```powershell
+$env:QUANTMIND_SEC_USER_AGENT = "Your Name contact@example.com"
+uv run python scripts/backfill_memory.py `
+  --tickers CRM META NVDA `
+  --years 5 `
+  --max-events-per-ticker 10 `
+  --dry-run
+```
+
+Useful options:
+
+| Option | Purpose |
+|---|---|
+| `--tickers` | Tickers to process |
+| `--years` | Historical window |
+| `--max-events-per-ticker` | Cap for price-only events |
+| `--checkpoint` | Resumable checkpoint path |
+| `--dry-run` | Report events without calling Hindsight |
+| `--list-events TICKER` | Print event dates, types, returns, headlines, and URLs |
+| `--type TYPE` | Filter `--list-events` output |
+
+Example debug command:
+
+```powershell
+uv run python scripts/backfill_memory.py `
+  --list-events CRM `
+  --type layoffs_restructuring `
+  --years 5
+```
+
+The backfill reports event counts, average record length, and an
+**unverified** Hindsight cost label. It does not assume a fixed credit cost per
+memory. Measure account usage before and after a live run.
+
+To inspect the event bank:
+
+```powershell
+uv run python scripts/verify_memory.py
+```
+
+The live backfill requires explicit credentials and should be run only after
+reviewing the dry-run output and checkpoint path.
+
+## API routes
+
+| Route | Description |
+|---|---|
+| `GET /api/health` | Service status and generated universe size |
+| `GET /api/search?q=...` | Ranked, grouped asset search |
+| `GET /api/universe` | Typed asset catalog |
+| `GET /api/report/{ticker}?memory=true` | Research report |
+| `GET /api/signals/{ticker}` | Deterministic signal analysis |
+| `GET /api/memory/{ticker}` | Asset memory status and recalled precedents |
+| `GET /api/reflect/{ticker}` | Hindsight reflection |
+| `POST /analyze` | Typed asynchronous analysis graph |
+| `GET /docs` | FastAPI OpenAPI documentation |
+
+The legacy `/research` page remains available while the React terminal is the
+primary flow.
+
+## Development checks
+
+Run the focused checks from the repository root:
+
+```powershell
+uv run ruff check quantmind tests scripts
+uv run pytest
+Push-Location web
+npm run typecheck
+npm run build
+Pop-Location
+```
+
+The current offline suite covers event serialization, SEC parsing, classifier
+rules, forward-return calculation, curated event validation, universe parsing,
+configuration, API behavior, and the analysis state graph.
+
+## Deployment
+
+The repository includes a multi-stage `Dockerfile` that builds the web client
+and copies the generated frontend and `data/` catalog into the runtime image.
+
+```powershell
+docker compose up --build
+```
+
+The service listens on port `8000`. Render configuration is provided in
+`render.yaml`; set secrets and the SEC User-Agent in the deployment dashboard,
+not in the repository.
+
+## Scope and limitations
+
+QuantMind does not:
+
+- provide financial advice or guarantee returns,
+- place trades or manage a brokerage account,
+- infer private or illegal insider information,
+- treat a headline as proof of causality,
+- replace primary-source diligence,
+- silently turn unavailable provider fields into facts.
+
+Market movements are multi-causal. Confidence is an evidence-coverage measure,
+not a probability that a trade will succeed. Historical precedents describe
+what happened before; they do not guarantee what happens next.
 
 ## License
 
-See the repository license and the licenses of the upstream providers and SDKs.
+See the repository license and the licenses, terms, and rate limits of the
+upstream providers and SDKs.
