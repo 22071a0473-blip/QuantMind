@@ -1,14 +1,14 @@
 import asyncio
 
-from foresight.agent_graph import AgentGraph, AgentState, GraphPhase
-from foresight.config import Settings
-from foresight.memory import RecalledMemory
-from foresight.models import MarketSnapshot, NewsItem
-from foresight.sources import LiveMarketSources, LiveResearchData, MarketFeatures
+from quantmind.agent_graph import AgentGraph, AgentState, GraphPhase
+from quantmind.config import Settings
+from quantmind.memory import RecalledMemory
+from quantmind.models import MarketSnapshot, NewsItem
+from quantmind.sources import LiveMarketSources, LiveResearchData, MarketFeatures
 
 
 def test_settings_reads_typed_environment(monkeypatch) -> None:
-    monkeypatch.setenv("FORESIGHT_CACHE_TTL", "17")
+    monkeypatch.setenv("QUANTMIND_CACHE_TTL", "17")
     settings = Settings.from_env()
     assert settings.cache_ttl_seconds == 17
 

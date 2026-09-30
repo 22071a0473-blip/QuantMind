@@ -5,9 +5,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 
-from foresight.config import Settings
-from foresight.logging_config import configure_logging
-from foresight.memory import HindsightMemory
+from quantmind.config import Settings
+from quantmind.logging_config import configure_logging
+from quantmind.memory import HindsightMemory
 
 
 async def main(asset: str, query: str) -> None:

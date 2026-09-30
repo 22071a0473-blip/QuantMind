@@ -33,12 +33,12 @@ class Settings:
             groq_api_key=os.getenv("GROQ_API_KEY") or None,
             groq_model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile").strip(),
             tavily_api_key=os.getenv("TAVILY_API_KEY") or None,
-            cache_ttl_seconds=max(0, int(value("FORESIGHT_CACHE_TTL_SECONDS", "FORESIGHT_CACHE_TTL", default="300"))),
-            log_level=value("FORESIGHT_LOG_LEVEL", "LOG_LEVEL", default="INFO").strip().upper(),
+            cache_ttl_seconds=max(0, int(value("QUANTMIND_CACHE_TTL_SECONDS", "QUANTMIND_CACHE_TTL", default="300"))),
+            log_level=value("QUANTMIND_LOG_LEVEL", "LOG_LEVEL", default="INFO").strip().upper(),
         )
 
 
-ForesightSettings = Settings
+QuantMindSettings = Settings
 
 
 def load_settings() -> Settings:

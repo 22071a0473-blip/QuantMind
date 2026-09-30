@@ -1,4 +1,4 @@
-from foresight.confidence_engine import CONFIDENCE_PARAMETERS, ConfidenceEngine, ConfidenceVector, VECTOR_WEIGHTS
+from quantmind.confidence_engine import CONFIDENCE_PARAMETERS, ConfidenceEngine, ConfidenceVector, VECTOR_WEIGHTS
 
 
 def test_confidence_has_fifty_parameters_and_unit_weights() -> None:

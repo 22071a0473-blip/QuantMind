@@ -1,5 +1,5 @@
-from foresight.analytics import InstitutionalAnalytics
-from foresight.sources import MarketFeatures
+from quantmind.analytics import InstitutionalAnalytics
+from quantmind.sources import MarketFeatures
 
 
 def test_analytics_uses_real_feature_lattice_and_regime() -> None:

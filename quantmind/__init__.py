@@ -1,0 +1,1 @@
+"""quantmind research analyst."""

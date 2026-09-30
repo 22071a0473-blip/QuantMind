@@ -1,8 +1,8 @@
 import pytest
 
-from foresight.memory import HindsightMemory
-from foresight.memory import MemoryRecord, summarize_precedent
-from foresight.models import MarketSnapshot, Report
+from quantmind.memory import HindsightMemory
+from quantmind.memory import MemoryRecord, summarize_precedent
+from quantmind.models import MarketSnapshot, Report
 
 
 def test_report_contract_requires_live_snapshot() -> None:

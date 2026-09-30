@@ -16,6 +16,7 @@ from .confidence_engine import ConfidenceAudit, ConfidenceEngine
 from .engine import QuantMindEngine
 from .llm import GroqResearcher
 from .memory import HindsightMemory
+from .universe import AssetKind, SearchResponse, UniverseAsset, list_universe, search_universe
 
 load_dotenv()
 
@@ -138,6 +139,19 @@ async def health() -> dict[str, str]:
 async def memory_status() -> dict[str, str]:
     build_engine()
     return {"backend": "hindsight-cloud", "status": "configured"}
+
+
+@app.get("/api/universe", response_model=list[UniverseAsset])
+async def universe(kind: AssetKind | None = Query(default=None)) -> list[UniverseAsset]:
+    return list_universe(kind)
+
+
+@app.get("/api/search", response_model=SearchResponse)
+async def search(
+    q: str = Query(min_length=1, max_length=80),
+    limit: int = Query(default=20, ge=1, le=50),
+) -> SearchResponse:
+    return search_universe(q, limit)
 
 
 @app.get("/api/report/{ticker}")

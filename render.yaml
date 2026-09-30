@@ -17,9 +17,9 @@ services:
         value: quantmind-
       - key: TAVILY_API_KEY
         sync: false
-      - key: FORESIGHT_CACHE_TTL_SECONDS
+      - key: QUANTMIND_CACHE_TTL_SECONDS
         value: "300"
-      - key: FORESIGHT_LOG_LEVEL
+      - key: QUANTMIND_LOG_LEVEL
         value: INFO
-      - key: FORESIGHT_SEC_USER_AGENT
+      - key: QUANTMIND_SEC_USER_AGENT
         sync: false

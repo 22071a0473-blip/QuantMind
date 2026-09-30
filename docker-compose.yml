@@ -1,5 +1,5 @@
 services:
-  foresight:
+  quantmind:
     build: .
     environment:
       HINDSIGHT_API_URL: ${HINDSIGHT_API_URL:-http://host.docker.internal:8888}
@@ -9,4 +9,4 @@ services:
       TAVILY_API_KEY: ${TAVILY_API_KEY:-}
     ports:
       - "8000:8000"
-    command: ["uvicorn", "foresight.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    command: ["uvicorn", "quantmind.app:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -110,8 +110,8 @@ framework.
 
 ## Deterministic confidence audit
 
-The report's compatibility analytics remains in `foresight/analytics.py`.
-Alongside it, `foresight/confidence_engine.py` evaluates 50 auditable
+The report's compatibility analytics remains in `quantmind/analytics.py`.
+Alongside it, `quantmind/confidence_engine.py` evaluates 50 auditable
 parameters across five vectors:
 
 - Market
@@ -152,7 +152,7 @@ honestly; they are not fixture data.
 ### Configure
 
 ```powershell
-cd foresight
+# Run from the repository root; .env.example is beside pyproject.toml.
 Copy-Item .env.example .env
 notepad .env
 ```
@@ -173,7 +173,7 @@ chat or a public issue, revoke it and create a new one.
 
 ```powershell
 uv sync
-uv run uvicorn foresight.app:app --reload --port 8000
+uv run uvicorn quantmind.app:app --reload --port 8000
 ```
 
 Open <http://127.0.0.1:8000>.
