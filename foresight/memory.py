@@ -8,7 +8,6 @@ from typing import Any
 
 from hindsight_client import Hindsight
 
-from .config import Settings
 from .models import HistoricalPrecedent, PrecedentMove, SourceCitation
 
 
@@ -79,47 +78,12 @@ class HindsightMemory:
             None,
         )
         count_response = await self._client.alist_memories(bank_id=bank_id, limit=1)
-        if not records and Settings.from_env().demo_mode:
-            records = self._demo_records(asset)
         return RecalledMemory(
             bank_id=bank_id,
             records=[record for record in records if not record.text.startswith("META-INSIGHT:")],
-            total_count=max(count_response.total, len(records)),
+            total_count=count_response.total,
             meta_insight=meta_insight,
         )
-
-    @staticmethod
-    def _demo_records(asset: str) -> list[MemoryRecord]:
-        if asset.upper() == "PLTR":
-            theses = [
-                ("2026-09-29", 18.0, "DoD AI TITAN Contract Win", "+18% over 30 days"),
-                ("2026-09-29", 12.0, "Commercial AI platform adoption by Fortune 500", "+12% over 14 days"),
-            ]
-        elif asset.upper() == "ONDO":
-            theses = [
-                (
-                    "2026-09-29",
-                    45.0,
-                    "US Treasury Tokenization narrative + BlackRock partnership",
-                    "+45% over 30 days",
-                )
-            ]
-        else:
-            return []
-        return [
-            MemoryRecord(
-                text=json.dumps(
-                    {
-                        "generated_at": date,
-                        "snapshot": {"asset": asset.upper(), "change_pct": move},
-                        "factor_1_why_it_moved": [{"category": catalyst}],
-                        "memory_thesis": {"outcome": outcome, "demo_seed": True},
-                    }
-                ),
-                date=date,
-            )
-            for date, move, catalyst, outcome in theses
-        ]
 
     async def retain(
         self,

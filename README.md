@@ -75,8 +75,8 @@ The memory lifecycle is:
 
 The web UI's **With Memory** and **Without Memory** links make this effect
 visible. Memory-off runs skip recall and apply a clearly labeled deterministic
-confidence penalty; this is a controlled comparison for the demo, not a claim
-that confidence can be mathematically guaranteed by memory alone.
+confidence penalty; this is a comparison baseline, not a claim that confidence
+can be mathematically guaranteed by memory alone.
 
 Learn more from the [Hindsight documentation](https://hindsight.vectorize.io/)
 and the [Hindsight source repository](https://github.com/vectorize-io/hindsight).
@@ -164,7 +164,6 @@ HINDSIGHT_API_URL=https://api.hindsight.vectorize.io
 HINDSIGHT_API_TOKEN=your_rotated_hindsight_token
 GROQ_API_KEY=your_groq_key
 GROQ_MODEL=llama-3.3-70b-versatile
-FORESIGHT_DEMO_MODE=false
 ```
 
 Never commit `.env`, API keys, or tokens. If a token has ever been pasted into
@@ -179,7 +178,7 @@ uv run uvicorn foresight.app:app --reload --port 8000
 
 Open <http://127.0.0.1:8000>.
 
-## Demo workflow
+## Research workflow
 
 1. Run `PLTR`, `CRWD`, or `CRYPTO:bitcoin` with **With Memory**.
 2. Show the five-factor memo, confidence audit, source links, and Hindsight

@@ -7,7 +7,6 @@ from datetime import UTC, datetime
 
 from .analytics import AnalyticsResult, InstitutionalAnalytics
 from .confidence_engine import ConfidenceAudit, ConfidenceEngine
-from .config import Settings
 from .llm import GroqResearcher
 from .memory import HindsightMemory, RecalledMemory, summarize_precedent
 from .models import (
@@ -105,39 +104,6 @@ class QuantMindEngine:
             "memory_precedent": min(100.0, precedent.count * 25) if memory_enabled and precedent.count else 0.0,
             "catalyst": 100.0 if live.news else 0.0,
         }
-        if Settings.from_env().demo_mode:
-            # Demo priors keep the visual comparison useful when free providers
-            # omit fundamentals, macro series, or positioning data. They are
-            # synthetic and never used when FORESIGHT_DEMO_MODE=false.
-            demo_parameters = {
-                "liquidity", "spread", "intraday_range", "relative_strength",
-                "support", "resistance", "breakout", "revenue_growth",
-                "earnings_growth", "margin", "cash_flow", "leverage", "valuation",
-                "guidance", "insider_alignment", "capital_allocation", "filing_quality",
-                "rates", "inflation", "employment", "gdp", "fx", "credit_spread",
-                "commodity", "liquidity", "policy", "macro_regime", "source_quality",
-                "headline_consensus", "social_breadth", "analyst_revision",
-                "short_interest",
-            }
-            observations.update({name: 88.0 for name in demo_parameters})
-            observations.update({
-                "price_change_1d": max(85.0, min(100.0, 88.0 + features.return_1d)),
-                "price_change_5d": max(85.0, min(100.0, 88.0 + features.return_5d / 2)),
-                "price_change_20d": max(85.0, min(100.0, 88.0 + features.return_20d / 4)),
-                "volume_ratio": max(85.0, min(100.0, 80.0 + features.volume_ratio * 4)),
-                "volatility": max(85.0, min(100.0, 100.0 - abs(features.volatility_20d - 45.0) / 2)),
-                "drawdown": max(85.0, min(100.0, 100.0 + features.drawdown_1y)),
-                "momentum": max(85.0, min(100.0, 88.0 + features.momentum_20d)),
-                "trend_slope": max(85.0, min(100.0, 88.0 + features.trend_slope)),
-                "sma20_distance": max(85.0, min(100.0, 88.0 + features.price_vs_sma20)),
-                "sma50_distance": max(85.0, min(100.0, 88.0 + features.price_vs_sma50)),
-                "high_low_position": max(85.0, min(100.0, features.high_low_position)),
-                "news_count": max(85.0, min(100.0, 70.0 + features.news_count * 8)),
-                "news_recency": 92.0 if live.news else 80.0,
-                "event_clarity": 94.0 if live.news else 80.0,
-                "catalyst": 94.0 if live.news else 80.0,
-                "memory_precedent": min(100.0, 88.0 + precedent.count * 4),
-            })
         audit = self._confidence_engine.evaluate(observations)
 
         if not memory_enabled:
@@ -178,9 +144,7 @@ class QuantMindEngine:
             live.snapshot.change_pct,
             primary_reason,
         )
-        # Hindsight indexing is asynchronous; keep the demo-visible seeded
-        # precedent count while the newly retained report becomes searchable.
-        report.memory_used.total_count = max(total, precedent.count)
+        report.memory_used.total_count = total
 
         if total > 0 and total % 5 == 0:
             insight = await self._memory.reflect(
@@ -228,24 +192,6 @@ class QuantMindEngine:
             bear_case="insufficient evidence",
             kill_conditions=[],
         )
-        demo_asset = live.snapshot.asset.upper().replace("CRYPTO:", "")
-        demo_company = {
-            "PLTR": "Palantir Technologies: defense AI contracts and commercial AIP adoption.",
-            "ONDO": "Ondo Finance: tokenized Treasury infrastructure and RWA distribution.",
-        }.get(demo_asset, f"{live.snapshot.asset}: live price and catalyst evidence.")
-        demo_sector = {
-            "PLTR": "Defense AI and enterprise software.",
-            "ONDO": "Real-world assets and tokenized fixed income.",
-        }.get(demo_asset, "The relevant asset and macro market segment.")
-        demo_macro = {
-            "PLTR": "Defense budget expansion and enterprise AI rotation.",
-            "ONDO": "Institutional adoption of tokenized Treasuries and real-world assets.",
-        }.get(demo_asset, "Institutional liquidity, rates, and risk appetite.")
-        demo_market_narrative = (
-            f"Demo evidence links {live.snapshot.asset} to {demo_sector.lower()} and the current catalyst tape."
-            if Settings.from_env().demo_mode
-            else "insufficient evidence"
-        )
         vector_groups = {vector.value: int(audit.vector_scores[vector]) for vector in audit.vector_scores}
         return Report(
             asset=live.snapshot.asset,
@@ -253,9 +199,9 @@ class QuantMindEngine:
             snapshot=live.snapshot,
             factor_1_why_it_moved=[driver],
             factor_2_deep_research=DeepResearch(
-                company=demo_company if Settings.from_env().demo_mode else "insufficient evidence",
-                sector=demo_sector if Settings.from_env().demo_mode else "insufficient evidence",
-                macro=demo_macro if Settings.from_env().demo_mode else "insufficient evidence",
+                company="insufficient evidence",
+                sector="insufficient evidence",
+                macro="insufficient evidence",
                 news=f"{len(live.news)} live news items analyzed.",
             ),
             confidence_meter=ConfidenceReport(
@@ -271,12 +217,8 @@ class QuantMindEngine:
             historical_precedent=precedent,
             factor_5_facts_vs_reality=FactsVsReality(
                 reported_facts="Live provider evidence.",
-                market_narrative=demo_market_narrative,
-                gap=(
-                    "Synthetic demo evidence is clearly labeled; verify catalysts against primary filings."
-                    if Settings.from_env().demo_mode
-                    else "insufficient evidence"
-                ),
+                market_narrative="insufficient evidence",
+                gap="insufficient evidence",
                 evidence=source,
             ),
             extended_analysis=ExtendedAnalysis(leadership=leadership, roadmap=roadmap),
@@ -287,10 +229,4 @@ class QuantMindEngine:
                 patterns=recalled.texts,
             ),
             live_news=live.news,
-            memory_impact=(
-                "Memory disabled: this is the baseline report. Factor 4 is intentionally empty and "
-                "the confidence score carries the deterministic memory-off penalty."
-                if not memory_enabled
-                else None
-            ),
         )

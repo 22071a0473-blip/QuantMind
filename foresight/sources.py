@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import math
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -11,7 +10,6 @@ import yfinance as yf
 from pycoingecko import CoinGeckoAPI
 
 from .models import Evidence, MarketSnapshot, NewsItem
-from .config import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +36,6 @@ class MarketFeatures:
     price_vs_sma50: float
     high_low_position: float
     news_count: float
-
-
-@dataclass(slots=True)
-class DemoNewsResult:
-    news: list[NewsItem]
-    evidence: list[Evidence]
 
 
 class LiveMarketSources:
@@ -86,7 +78,7 @@ class LiveMarketSources:
             provider_news = ticker.news[:12]
         except Exception as exc:
             # Yahoo's news endpoint is independently rate-limited; preserve
-            # usable price history so the demo fallback can supply labeled evidence.
+            # usable price history when only the news request fails.
             logger.warning("Yahoo news unavailable for %s: %s", ticker_symbol, exc)
             provider_news = []
         news = [
@@ -134,10 +126,6 @@ class LiveMarketSources:
             )
             for item in news
         )
-        if Settings.from_env().demo_mode:
-            demo = self._demo_news(ticker_symbol, news, evidence)
-            news, evidence = demo.news, demo.evidence
-            features = self._demo_features(features, news)
         return LiveResearchData(snapshot=snapshot, evidence=evidence, news=news, features=features)
 
     def _crypto(self, asset: str) -> LiveResearchData:
@@ -177,76 +165,4 @@ class LiveMarketSources:
             high_low_position=50,
             news_count=0,
         )
-        news: list[NewsItem] = []
-        if Settings.from_env().demo_mode:
-            demo = self._demo_news(snapshot.asset, news, evidence)
-            news, evidence = demo.news, demo.evidence
-            features = self._demo_features(features, news)
-        return LiveResearchData(snapshot=snapshot, evidence=evidence, news=news, features=features)
-
-    @staticmethod
-    def _demo_news(
-        asset: str,
-        news: list[NewsItem],
-        evidence: list[Evidence],
-    ) -> DemoNewsResult:
-        if news:
-            return DemoNewsResult(news=news, evidence=evidence)
-        today = datetime.now(UTC).date().isoformat()
-        normalized = asset.upper()
-        if normalized == "PLTR":
-            items = [
-                ("Palantir awarded a simulated Army TITAN contract catalyst for demo analysis", "Demo wire"),
-                ("Defense AI spending theme strengthens across the simulated market tape", "Demo macro desk"),
-                ("Commercial AI platform adoption remains the leading demo scenario", "Demo research desk"),
-            ]
-        elif normalized in {"ONDO", "CRYPTO:ONDO"}:
-            items = [
-                ("RWA tokenization and Treasury infrastructure remain the simulated ONDO catalyst", "Demo wire"),
-                ("Institutional digital-asset adoption strengthens the simulated RWA theme", "Demo macro desk"),
-            ]
-        else:
-            items = [
-                (f"{normalized} catalyst and institutional flow scenario for demo analysis", "Demo research desk"),
-                (f"{normalized} market-regime context and cross-asset response scenario", "Demo macro desk"),
-            ]
-        synthetic = [
-            NewsItem(
-                title=title,
-                publisher=publisher,
-                url="https://example.com/quantmind-demo-evidence",
-                published=today,
-                summary="Synthetic demo evidence; not a live news report.",
-            )
-            for title, publisher in items
-        ]
-        evidence.extend(
-            Evidence(
-                source=item.publisher,
-                url=item.url,
-                date=item.published,
-                snippet=item.summary,
-            )
-            for item in synthetic
-        )
-        return DemoNewsResult(news=synthetic, evidence=evidence)
-
-    @staticmethod
-    def _demo_features(features: MarketFeatures, news: list[NewsItem]) -> MarketFeatures:
-        def fallback(value: float, replacement: float) -> float:
-            return replacement if not math.isfinite(value) or value == 0 else value
-
-        return MarketFeatures(
-            return_1d=fallback(features.return_1d, 4.5),
-            return_5d=fallback(features.return_5d, 9.0),
-            return_20d=fallback(features.return_20d, 18.0),
-            volatility_20d=fallback(features.volatility_20d, 45.0),
-            volume_ratio=fallback(features.volume_ratio, 2.5),
-            drawdown_1y=features.drawdown_1y,
-            momentum_20d=fallback(features.momentum_20d, 3.5),
-            trend_slope=fallback(features.trend_slope, 0.8),
-            price_vs_sma20=fallback(features.price_vs_sma20, 6.0),
-            price_vs_sma50=fallback(features.price_vs_sma50, 10.0),
-            high_low_position=features.high_low_position or 72.0,
-            news_count=float(len(news)),
-        )
+        return LiveResearchData(snapshot=snapshot, evidence=evidence, news=[], features=features)

@@ -9,10 +9,8 @@ from foresight.sources import LiveMarketSources, LiveResearchData, MarketFeature
 
 def test_settings_reads_typed_environment(monkeypatch) -> None:
     monkeypatch.setenv("FORESIGHT_CACHE_TTL", "17")
-    monkeypatch.setenv("FORESIGHT_DEMO_MODE", "true")
     settings = Settings.from_env()
     assert settings.cache_ttl_seconds == 17
-    assert settings.demo_mode is True
 
 
 def test_graph_state_machine_can_fail_without_sources() -> None:

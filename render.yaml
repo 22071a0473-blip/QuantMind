@@ -21,7 +21,5 @@ services:
         value: "300"
       - key: FORESIGHT_LOG_LEVEL
         value: INFO
-      - key: FORESIGHT_DEMO_MODE
-        value: "false"
       - key: FORESIGHT_SEC_USER_AGENT
         sync: false
