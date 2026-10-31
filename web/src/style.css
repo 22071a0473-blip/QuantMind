@@ -118,6 +118,18 @@ em { color: #f0a441; font-style: normal; }
 .ledger-head span { color: #60778c; font-size: 9px; font-weight: 800; letter-spacing: .1em; }
 .ledger-row:not(.ledger-head):hover { background: #102536; }
 .ledger-panel .button-primary { border: 0; font-size: 9px; }
+.precedent-event { display: grid; gap: 6px; padding: 16px; border-bottom: 1px solid #1b3042; }
+.precedent-event strong { color: #f0a441; font-size: 13px; }
+.precedent-event span, .precedent-event a { color: #8096a8; font-size: 11px; }
+.precedent-event a { color: #dce7ee; }
+.analogue-table { overflow-x: auto; }
+.analogue-row { display: grid; grid-template-columns: minmax(150px, 1.4fr) 1fr 90px 70px 70px 70px; min-width: 620px; border-bottom: 1px solid #1b3042; }
+.analogue-row span { padding: 11px 12px; color: #879bad; font-size: 10px; }
+.analogue-row small { display: block; color: #f0a441; font-size: 9px; margin-top: 3px; }
+.analogue-head span { color: #60778c; font-weight: 800; letter-spacing: .1em; }
+.distribution-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; border-top: 1px solid #203448; }
+.distribution { display: grid; gap: 5px; padding: 12px; background: #0c1a28; color: #8096a8; font-size: 10px; }
+.distribution strong { color: #f0a441; }
 .button-primary:disabled { cursor: wait; opacity: .6; }
 .warning-bar { margin-top: 14px; padding: 12px 15px; border-left: 2px solid #e87b6d; color: #e8a79e; background: #281c23; font-size: 11px; }
 .disclaimer { margin: 15px 0; }

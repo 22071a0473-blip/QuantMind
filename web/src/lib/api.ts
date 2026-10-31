@@ -67,6 +67,41 @@ export type MarketResponse = {
   points: MarketPoint[];
 };
 
+export type PrecedentRow = {
+  event_id: string;
+  ticker: string;
+  event_date: string;
+  event_type: string;
+  headline: string;
+  source_url: string | null;
+  similarity?: number;
+  feature_scores?: Record<string, number>;
+  retrieval_source?: "structured" | "semantic" | "both";
+  relaxation_level?: string;
+  forward_returns: Record<string, number | null>;
+};
+
+export type PrecedentResponse = {
+  ticker: string;
+  cutoff: string;
+  status: "ok" | "no_event" | "insufficient_analogues";
+  detected_event: PrecedentRow | null;
+  matches?: PrecedentRow[];
+  distributions?: Record<string, {
+    n: number;
+    insufficient_analogues: boolean;
+    median?: number | null;
+    mean?: number | null;
+    iqr?: number | null;
+    hit_rate?: number | null;
+    interval_90?: { lower: number; upper: number } | null;
+    forecast_probability?: number | null;
+    base_rate_scope?: string | null;
+  }>;
+  relaxation_level?: string;
+  semantic_status?: string;
+};
+
 export type HealthResponse = {
   status: string;
   database: string;
@@ -123,6 +158,12 @@ export async function fetchMarket(ticker: string, signal: AbortSignal): Promise<
   const response = await fetch(`/api/market/${encodeURIComponent(ticker)}?limit=500`, { signal });
   if (!response.ok) throw new Error(`Market series unavailable (${response.status})`);
   return response.json() as Promise<MarketResponse>;
+}
+
+export async function fetchPrecedent(ticker: string, signal: AbortSignal): Promise<PrecedentResponse> {
+  const response = await fetch(`/api/precedent/${encodeURIComponent(ticker)}`, { signal });
+  if (!response.ok) throw new Error(`Precedent unavailable (${response.status})`);
+  return response.json() as Promise<PrecedentResponse>;
 }
 
 export async function fetchHealth(signal: AbortSignal): Promise<HealthResponse> {

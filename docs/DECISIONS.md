@@ -66,3 +66,22 @@
   ledger until enough history is available.
 - **Operational consequence:** The UI explains why a forecast cannot be
   committed instead of writing a weak or fabricated probability.
+
+## ADR-006: Use one shared event bank and structured authority
+
+- **Context:** Per-ticker Hindsight banks made precedent retrieval difficult to
+  compare and left exact numeric outcomes dependent on text parsing.
+- **Decision:** `market_events` is authoritative for dates, features, returns,
+  similarity, and statistics. Hindsight uses the shared `quantmind-events`
+  bank only to discover semantic candidates, which are mapped back by
+  deterministic document IDs.
+- **Operational consequence:** Hindsight outages degrade `semantic_status` but
+  do not remove structured precedent or create fabricated values.
+
+## ADR-007: Installed Hindsight SDK surface
+
+The installed client exposes `aretain`, `aretain_batch`, `arecall`,
+`alist_memories`, `aget_bank_config`, and `acreate_bank`. It has no public
+operation-status polling method in this environment, so batch retention uses
+synchronous operation mode. Tag filtering is not exposed by `arecall`; tags
+remain write-time provenance metadata rather than a retrieval predicate.

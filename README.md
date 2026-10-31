@@ -237,10 +237,14 @@ evidence identifiers, and deterministic probability. A forecast is committed
 only through `POST /api/ledger/commit`; ordinary report and read routes do not
 write ledger rows.
 
-The current `baseline-v0` compares historical ticker returns with SPY and
-refuses to create a forecast below 30 complete observations. Once the horizon
-elapses, the resolver records adjusted-close returns and classifies the result
-as resolved, censored, or invalidated without filling missing prices. Metrics
+New ledger commits use `analogue-v1`: a detected source-backed or price-only
+event is compared with point-in-time historical analogues, with explicit
+similarity, relaxation level, elapsed sample size, base-rate scope, and
+matched event IDs. Fewer than five elapsed analogue outcomes produces a
+plain-language refusal rather than a numeric forecast. Existing `baseline-v0`
+rows remain verifiable for backward compatibility. Once the horizon elapses,
+the resolver records adjusted-close returns and classifies the result as
+resolved, censored, or invalidated without filling missing prices. Metrics
 remain hidden until 20 resolved observations exist, and live-forward results
 are never mixed with historical replay results.
 

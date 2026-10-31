@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import os
+import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 from statistics import mean, pstdev
@@ -20,10 +21,15 @@ def detect_current_event(ticker: str, cutoff: datetime) -> EventQuery | None:
     event_store = EventStore(database)
     ledger_store = LedgerStore(database)
     try:
-        bars = [
-            bar for bar in ledger_store.market_bars(ticker.upper())
-            if bar.observed_at <= effective_cutoff
-        ]
+        try:
+            bars = [
+                bar for bar in ledger_store.market_bars(ticker.upper())
+                if bar.observed_at <= effective_cutoff
+            ]
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc):
+                return None
+            raise
         trading_dates = sorted({bar.observed_at.date() for bar in bars})
         recent_dates = set(trading_dates[-3:])
         recent_events = [

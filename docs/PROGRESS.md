@@ -36,3 +36,23 @@ Status: passed locally on 2026-03-10.
   calibration state.
 - Validation: 63 backend tests passed, Ruff passed, frontend typecheck passed,
   and the production frontend build passed.
+
+## Gate 2 — analogue foundation and precedent surface
+
+Status: foundation implemented locally on 2026-10-31.
+
+- Added idempotent `market_events` storage with deterministic event IDs,
+  forward-return completion dates, and strict cutoff eligibility.
+- Added weighted L0/L1/L2 analogue retrieval, stable bootstrap intervals,
+  shrinkage probabilities, and explicit insufficient-sample refusals.
+- Added current-event detection and read-only `/api/precedent/{ticker}` with
+  future-cutoff rejection.
+- Added explicit `--write` protection to event backfill and a coverage report
+  script. The current checked-out corpus contains zero structured events, so
+  coverage is honestly reported as empty rather than inferred.
+- Added a Precedent tab with loading, no-event, insufficient, semantic-status,
+  similarity, source-link, and forward-return states.
+- Installed Hindsight probe output confirms no public operation-status polling
+  method and no `arecall` tag-filter parameter.
+- Validation: 67 backend tests passed, Ruff passed, frontend typecheck passed,
+  and the production frontend build passed.

@@ -1,6 +1,8 @@
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
+from fastapi.testclient import TestClient
+
 from quantmind.analogue_stats import compute_statistics, stable_seed
 from quantmind.analogues import AnalogueMatch, EventQuery, feature_scores, retrieve_analogues, similarity
 from quantmind.event_store import EventStore, MarketEvent, deterministic_event_id
@@ -154,3 +156,18 @@ def test_underperform_probability_is_complementary() -> None:
     outperform = compute_statistics(matches, all_event_returns=[0.1] * 20)
     underperform = compute_statistics(matches, all_event_returns=[0.1] * 20, direction="underperform")
     assert underperform.forecast_probability == 1 - outperform.forecast_probability
+
+
+def test_precedent_rejects_future_cutoff_and_is_empty_without_events(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("QUANTMIND_DATABASE", str(tmp_path / "empty.db"))
+    from quantmind.app import app
+
+    client = TestClient(app)
+    response = client.get("/api/precedent/CRM?cutoff=2999-01-01T00:00:00Z")
+    assert response.status_code == 422
+    response = client.get("/api/precedent/CRM")
+    assert response.status_code == 200
+    assert response.json()["status"] == "no_event"
