@@ -119,6 +119,23 @@ class OutcomeRecord(BaseModel):
     evaluation_status: str = "resolved"
 
 
+class FinancialFactRecord(BaseModel):
+    fact_id: UUID = Field(default_factory=uuid4)
+    company_id: UUID
+    taxonomy: str
+    fact_name: str
+    period_start: date | None = None
+    period_end: date
+    filed_at: datetime
+    available_at: datetime
+    value: float
+    unit: str
+    form: str | None = None
+    accession: str | None = None
+    provider: str
+    supersedes_fact_id: UUID | None = None
+
+
 class CoverageSummary(BaseModel):
     companies: int
     public_companies: int
@@ -126,6 +143,30 @@ class CoverageSummary(BaseModel):
     market_bars: int
     ingestion_jobs: int
     quality_issues: int
+    financial_facts: int = 0
+
+
+class SecurityCoverage(BaseModel):
+    ticker: str
+    security_id: UUID
+    bars: int
+    first_observation: datetime | None
+    latest_observation: datetime | None
+    quality_issues: int
+
+
+class SecurityLookup(BaseModel):
+    security_id: UUID
+    company_id: UUID
+    ticker: str
+    exchange: str | None = None
+    currency: str
+    cik: str | None = None
+
+
+class CoverageExport(BaseModel):
+    summary: CoverageSummary
+    securities: list[SecurityCoverage] = Field(default_factory=list)
 
 
 def _iso(value: date | datetime | None) -> str | None:
@@ -248,6 +289,22 @@ class SQLiteStore:
                 resolved_at TEXT NOT NULL,
                 evaluation_status TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS financial_facts (
+                fact_id TEXT PRIMARY KEY,
+                company_id TEXT NOT NULL REFERENCES companies(company_id),
+                taxonomy TEXT NOT NULL,
+                fact_name TEXT NOT NULL,
+                period_start TEXT,
+                period_end TEXT NOT NULL,
+                filed_at TEXT NOT NULL,
+                available_at TEXT NOT NULL,
+                value REAL NOT NULL,
+                unit TEXT NOT NULL,
+                form TEXT,
+                accession TEXT,
+                provider TEXT NOT NULL,
+                supersedes_fact_id TEXT
+            );
             CREATE INDEX IF NOT EXISTS idx_market_bars_security_date
                 ON market_bars(security_id, observed_at);
             CREATE INDEX IF NOT EXISTS idx_quality_issues_entity
@@ -262,6 +319,52 @@ class SQLiteStore:
 
     def close(self) -> None:
         self._connection.close()
+
+    def upsert_source(self, source: DataSourceRecord) -> None:
+        self._connection.execute(
+            """
+            INSERT OR REPLACE INTO data_sources(
+                source_id, provider, source_url, retrieved_at, content_hash
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                str(source.source_id),
+                source.provider,
+                source.source_url,
+                _iso(source.retrieved_at),
+                source.content_hash,
+            ),
+        )
+        self._connection.commit()
+
+    def save_ingestion_job(self, job: IngestionJobRecord) -> None:
+        self._connection.execute(
+            """
+            INSERT OR REPLACE INTO ingestion_jobs(
+                job_id, job_type, security_id, status, requested_start,
+                requested_end, records_received, records_inserted,
+                records_updated, records_rejected, retry_count, last_error,
+                started_at, completed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(job.job_id),
+                job.job_type,
+                str(job.security_id) if job.security_id else None,
+                job.status,
+                _iso(job.requested_start),
+                _iso(job.requested_end),
+                job.records_received,
+                job.records_inserted,
+                job.records_updated,
+                job.records_rejected,
+                job.retry_count,
+                job.last_error,
+                _iso(job.started_at),
+                _iso(job.completed_at),
+            ),
+        )
+        self._connection.commit()
 
     def upsert_company(self, company: CompanyRecord) -> None:
         self._connection.execute(
@@ -361,6 +464,20 @@ class SQLiteStore:
         self._connection.commit()
         return len(records)
 
+    def count_market_bars(self, security_id: UUID, provider: str, observed_at: Iterable[datetime]) -> int:
+        timestamps = [_iso(value) for value in observed_at]
+        if not timestamps:
+            return 0
+        placeholders = ", ".join("?" for _ in timestamps)
+        row = self._connection.execute(
+            f"""
+            SELECT COUNT(*) FROM market_bars
+            WHERE security_id = ? AND provider = ? AND observed_at IN ({placeholders})
+            """,
+            (str(security_id), provider, *timestamps),
+        ).fetchone()
+        return int(row[0])
+
     def record_quality_issue(self, issue: DataQualityIssueRecord) -> None:
         self._connection.execute(
             """
@@ -381,6 +498,102 @@ class SQLiteStore:
             ),
         )
         self._connection.commit()
+
+    def upsert_financial_fact(self, fact: FinancialFactRecord) -> None:
+        self.upsert_financial_facts([fact])
+
+    def upsert_financial_facts(self, facts: Iterable[FinancialFactRecord]) -> int:
+        records = list(facts)
+        self._connection.executemany(
+            """
+            INSERT OR REPLACE INTO financial_facts(
+                fact_id, company_id, taxonomy, fact_name, period_start,
+                period_end, filed_at, available_at, value, unit, form,
+                accession, provider, supersedes_fact_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    str(fact.fact_id),
+                    str(fact.company_id),
+                    fact.taxonomy,
+                    fact.fact_name,
+                    _iso(fact.period_start),
+                    _iso(fact.period_end),
+                    _iso(fact.filed_at),
+                    _iso(fact.available_at),
+                    fact.value,
+                    fact.unit,
+                    fact.form,
+                    fact.accession,
+                    fact.provider,
+                    str(fact.supersedes_fact_id) if fact.supersedes_fact_id else None,
+                )
+                for fact in records
+            ],
+        )
+        self._connection.commit()
+        return len(records)
+
+    def security_coverage(self, security_id: UUID, ticker: str) -> SecurityCoverage:
+        row = self._connection.execute(
+            """
+            SELECT COUNT(*) AS bars, MIN(observed_at) AS first_observation,
+                   MAX(observed_at) AS latest_observation
+            FROM market_bars WHERE security_id = ?
+            """,
+            (str(security_id),),
+        ).fetchone()
+        issue_count = self._connection.execute(
+            "SELECT COUNT(*) FROM quality_issues WHERE entity_type = 'security' AND entity_id = ?",
+            (str(security_id),),
+        ).fetchone()[0]
+        return SecurityCoverage(
+            ticker=ticker,
+            security_id=security_id,
+            bars=int(row["bars"]),
+            first_observation=row["first_observation"],
+            latest_observation=row["latest_observation"],
+            quality_issues=int(issue_count),
+        )
+
+    def find_security(self, ticker: str) -> SecurityLookup | None:
+        row = self._connection.execute(
+            """
+            SELECT security_id, company_id, ticker, exchange, currency, cik
+            FROM securities WHERE UPPER(ticker) = UPPER(?) ORDER BY security_id LIMIT 1
+            """,
+            (ticker,),
+        ).fetchone()
+        if row is None:
+            return None
+        return SecurityLookup(
+            security_id=UUID(row["security_id"]),
+            company_id=UUID(row["company_id"]),
+            ticker=row["ticker"],
+            exchange=row["exchange"],
+            currency=row["currency"],
+            cik=row["cik"],
+        )
+
+    def latest_market_observation(self, security_id: UUID) -> date | None:
+        row = self._connection.execute(
+            "SELECT MAX(observed_at) AS latest_observation FROM market_bars WHERE security_id = ?",
+            (str(security_id),),
+        ).fetchone()
+        if not row or row["latest_observation"] is None:
+            return None
+        return date.fromisoformat(str(row["latest_observation"])[:10])
+
+    def coverage_export(self) -> CoverageExport:
+        rows = self._connection.execute(
+            "SELECT security_id, ticker FROM securities ORDER BY ticker"
+        ).fetchall()
+        securities = [
+            self.security_coverage(UUID(row["security_id"]), row["ticker"])
+            for row in rows
+        ]
+        return CoverageExport(summary=self.coverage(), securities=securities)
 
     def save_research_report(self, report: ResearchReportRecord) -> None:
         self._connection.execute(
@@ -449,6 +662,7 @@ class SQLiteStore:
         market_bars = int(self._connection.execute("SELECT COUNT(*) FROM market_bars").fetchone()[0])
         ingestion_jobs = int(self._connection.execute("SELECT COUNT(*) FROM ingestion_jobs").fetchone()[0])
         quality_issues = int(self._connection.execute("SELECT COUNT(*) FROM quality_issues").fetchone()[0])
+        financial_facts = int(self._connection.execute("SELECT COUNT(*) FROM financial_facts").fetchone()[0])
         return CoverageSummary(
             companies=companies,
             public_companies=public_companies,
@@ -456,6 +670,7 @@ class SQLiteStore:
             market_bars=market_bars,
             ingestion_jobs=ingestion_jobs,
             quality_issues=quality_issues,
+            financial_facts=financial_facts,
         )
 
     def export_coverage(self) -> str:

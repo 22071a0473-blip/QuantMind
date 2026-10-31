@@ -97,6 +97,9 @@ The repository contains:
 | `scripts/backfill_memory.py` | Dry-run and resumable historical event backfill |
 | `scripts/verify_memory.py` | Inspects records in the `quantmind-events` Hindsight bank |
 | `scripts/probe_hindsight_sdk.py` | Documents the installed Hindsight SDK surface |
+| `scripts/ingest_universe.py` | Versioned Fortune 500 CSV ingestion and identity-resolution report |
+| `scripts/ingest_market.py` | Resumable single-security historical or incremental market ingestion |
+| `scripts/report_coverage.py` | Machine-readable canonical-store coverage report |
 | `data/universe.json` | Generated searchable asset catalog |
 | `data/known_events.csv` | Validated, source-linked curated catalyst labels |
 | `tests/` | Offline parser, analytics, universe, API, and memory-format tests |
@@ -283,8 +286,62 @@ uv run python scripts/init_database.py --database data/dev-quantmind.db
 
 The current store is the persistence foundation for the planned incremental
 market, filing, fundamentals, forecast-resolution, and coverage jobs. Those
-jobs must populate it through typed records and idempotent upserts; the
-repository does not claim that full Fortune 500 ingestion is complete.
+jobs populate it through typed records and idempotent upserts. Raw numerical
+bars stay in SQLite; only compact source-backed events and research reports
+belong in Hindsight.
+
+### Phase 2 ingestion commands
+
+The Fortune 500 command intentionally accepts a verified CSV export instead of
+silently scraping an unstable page. Required columns are `rank` and
+`company`; `ticker`, `exchange`, `headquarters`, and `website` are optional.
+Unresolved or private companies are persisted as companies and reported rather
+than guessed:
+
+```powershell
+uv run python scripts/ingest_universe.py `
+  --year 2025 `
+  --source data/fortune500-2025.csv `
+  --report data/fortune500_coverage.json
+```
+
+After a security has been resolved into the database, ingest at least two years
+of daily OHLCV data. The yfinance adapter preserves adjusted-close semantics,
+provider provenance, availability timestamps, duplicate handling, retry counts,
+and data-quality issues:
+
+```powershell
+uv run python scripts/ingest_market.py `
+  --ticker AAPL `
+  --security-id <resolved-security-uuid> `
+  --years 2 `
+  --checkpoint .cache/market/aapl.json
+```
+
+Use the same command for an incremental update. It starts the request after the
+latest stored observation and remains idempotent:
+
+```powershell
+uv run python scripts/ingest_market.py `
+  --ticker AAPL `
+  --incremental `
+  --checkpoint .cache/market/aapl.json
+```
+
+SEC Company Facts ingestion is available as a typed provider boundary and
+preserves filing dates, period dates, units, forms, accession numbers, and
+point-in-time availability. A real SEC User-Agent is required. Coverage can be
+exported at any time:
+
+```powershell
+uv run python scripts/report_coverage.py `
+  --database data/quantmind.db `
+  --output data/coverage.json
+```
+
+The initial adapter uses Yahoo Finance for market history and SEC Company Facts
+for fundamentals. These sources are suitable for a reproducible hackathon
+prototype, not a claim of licensed institutional-grade market-data coverage.
 
 ## API routes
 

@@ -36,6 +36,7 @@ def test_storage_upserts_entities_and_market_bars(tmp_path: Path) -> None:
             "market_bars": 1,
             "ingestion_jobs": 0,
             "quality_issues": 0,
+            "financial_facts": 0,
         }
     finally:
         store.close()

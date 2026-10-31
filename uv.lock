@@ -1861,6 +1861,7 @@ name = "quantmind"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "aiohttp" },
     { name = "fastapi" },
     { name = "groq" },
     { name = "hindsight-client" },
@@ -1884,6 +1885,7 @@ test = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiohttp", specifier = ">=3.10" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "groq", specifier = ">=0.30" },
     { name = "hindsight-client", specifier = ">=0.10.1" },

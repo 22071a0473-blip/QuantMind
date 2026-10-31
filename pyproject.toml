@@ -5,6 +5,7 @@ description = "Evidence-grounded market research terminal built on Hindsight"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115",
+  "aiohttp>=3.10",
   "uvicorn[standard]>=0.30",
   "pydantic>=2.7",
   "hindsight-client>=0.10.1",
