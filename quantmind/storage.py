@@ -113,8 +113,8 @@ class ForecastRecord(BaseModel):
 
 class OutcomeRecord(BaseModel):
     forecast_id: UUID
-    observed_at: datetime
-    realized_return: float
+    observed_at: datetime | None = None
+    realized_return: float | None = None
     resolved_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     evaluation_status: str = "resolved"
 
@@ -164,9 +164,56 @@ class SecurityLookup(BaseModel):
     cik: str | None = None
 
 
+class CompanyProfile(BaseModel):
+    company_id: UUID
+    security_id: UUID
+    ticker: str
+    legal_name: str
+    exchange: str | None = None
+    currency: str
+    cik: str | None = None
+    sector: str | None = None
+    industry: str | None = None
+    website: str | None = None
+
+
+class MarketSeriesPoint(BaseModel):
+    observed_at: datetime
+    open: float
+    high: float
+    low: float
+    close: float
+    adjusted_close: float | None = None
+    volume: float | None = None
+    provider: str
+
+
 class CoverageExport(BaseModel):
     summary: CoverageSummary
     securities: list[SecurityCoverage] = Field(default_factory=list)
+
+
+class MarketBarQuery(BaseModel):
+    security_id: UUID
+    observed_at: datetime
+    open: float
+    high: float
+    low: float
+    close: float
+    adjusted_close: float | None = None
+    volume: float | None = None
+    provider: str
+    available_at: datetime
+    ingested_at: datetime
+
+
+class JsonSnapshotRecord(BaseModel):
+    snapshot_type: str
+    snapshot_id: str
+    security_id: UUID | None = None
+    observed_at: datetime
+    payload: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 def _iso(value: date | datetime | None) -> str | None:
@@ -284,8 +331,8 @@ class SQLiteStore:
             );
             CREATE TABLE IF NOT EXISTS outcomes (
                 forecast_id TEXT PRIMARY KEY,
-                observed_at TEXT NOT NULL,
-                realized_return REAL NOT NULL,
+                observed_at TEXT,
+                realized_return REAL,
                 resolved_at TEXT NOT NULL,
                 evaluation_status TEXT NOT NULL
             );
@@ -305,6 +352,15 @@ class SQLiteStore:
                 provider TEXT NOT NULL,
                 supersedes_fact_id TEXT
             );
+            CREATE TABLE IF NOT EXISTS json_snapshots (
+                snapshot_type TEXT NOT NULL,
+                snapshot_id TEXT NOT NULL,
+                security_id TEXT,
+                observed_at TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY(snapshot_type, snapshot_id)
+            );
             CREATE INDEX IF NOT EXISTS idx_market_bars_security_date
                 ON market_bars(security_id, observed_at);
             CREATE INDEX IF NOT EXISTS idx_quality_issues_entity
@@ -315,7 +371,33 @@ class SQLiteStore:
             "INSERT OR IGNORE INTO schema_version(version, applied_at) VALUES (?, ?)",
             (1, _iso(datetime.now(UTC))),
         )
+        self._migrate_nullable_outcomes()
         self._connection.commit()
+
+    def _migrate_nullable_outcomes(self) -> None:
+        columns = self._connection.execute("PRAGMA table_info(outcomes)").fetchall()
+        required = {row["name"]: row["notnull"] for row in columns}
+        if required.get("observed_at", 0) == 0 and required.get("realized_return", 0) == 0:
+            return
+        self._connection.execute(
+            """
+            CREATE TABLE outcomes_v2 (
+                forecast_id TEXT PRIMARY KEY,
+                observed_at TEXT,
+                realized_return REAL,
+                resolved_at TEXT NOT NULL,
+                evaluation_status TEXT NOT NULL
+            )
+            """
+        )
+        self._connection.execute(
+            """
+            INSERT INTO outcomes_v2(forecast_id, observed_at, realized_return, resolved_at, evaluation_status)
+            SELECT forecast_id, observed_at, realized_return, resolved_at, evaluation_status FROM outcomes
+            """
+        )
+        self._connection.execute("DROP TABLE outcomes")
+        self._connection.execute("ALTER TABLE outcomes_v2 RENAME TO outcomes")
 
     def close(self) -> None:
         self._connection.close()
@@ -464,6 +546,71 @@ class SQLiteStore:
         self._connection.commit()
         return len(records)
 
+    def market_bars_for_security(
+        self,
+        security_id: UUID,
+        start: date | None = None,
+        end: date | None = None,
+    ) -> list[MarketBarRecord]:
+        clauses = ["security_id = ?"]
+        parameters: list[str] = [str(security_id)]
+        if start is not None:
+            clauses.append("observed_at >= ?")
+            parameters.append(start.isoformat())
+        if end is not None:
+            clauses.append("observed_at < ?")
+            parameters.append(end.isoformat() + "T23:59:59+00:00")
+        rows = self._connection.execute(
+            f"""
+            SELECT security_id, observed_at, open, high, low, close,
+                   adjusted_close, volume, provider, available_at, ingested_at
+            FROM market_bars WHERE {' AND '.join(clauses)}
+            ORDER BY observed_at
+            """,
+            parameters,
+        ).fetchall()
+        return [
+            MarketBarRecord(
+                security_id=UUID(row["security_id"]),
+                observed_at=datetime.fromisoformat(row["observed_at"]),
+                open=row["open"],
+                high=row["high"],
+                low=row["low"],
+                close=row["close"],
+                adjusted_close=row["adjusted_close"],
+                volume=row["volume"],
+                provider=row["provider"],
+                available_at=datetime.fromisoformat(row["available_at"]),
+                ingested_at=datetime.fromisoformat(row["ingested_at"]),
+            )
+            for row in rows
+        ]
+
+    def save_json_snapshot(
+        self,
+        snapshot_type: str,
+        snapshot_id: str,
+        security_id: UUID | None,
+        observed_at: datetime,
+        payload: str,
+    ) -> None:
+        self._connection.execute(
+            """
+            INSERT OR REPLACE INTO json_snapshots(
+                snapshot_type, snapshot_id, security_id, observed_at, payload, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                snapshot_type,
+                snapshot_id,
+                str(security_id) if security_id else None,
+                _iso(observed_at),
+                payload,
+                _iso(datetime.now(UTC)),
+            ),
+        )
+        self._connection.commit()
+
     def count_market_bars(self, security_id: UUID, provider: str, observed_at: Iterable[datetime]) -> int:
         timestamps = [_iso(value) for value in observed_at]
         if not timestamps:
@@ -576,6 +723,55 @@ class SQLiteStore:
             cik=row["cik"],
         )
 
+    def company_profile(self, security_id: UUID) -> CompanyProfile | None:
+        row = self._connection.execute(
+            """
+            SELECT s.company_id, s.security_id, s.ticker, c.legal_name, s.exchange,
+                   s.currency, s.cik, c.sector, c.industry, c.website
+            FROM securities s
+            JOIN companies c ON c.company_id = s.company_id
+            WHERE s.security_id = ?
+            LIMIT 1
+            """,
+            (str(security_id),),
+        ).fetchone()
+        if row is None:
+            return None
+        return CompanyProfile(
+            company_id=UUID(row["company_id"]),
+            security_id=UUID(row["security_id"]),
+            ticker=row["ticker"],
+            legal_name=row["legal_name"],
+            exchange=row["exchange"],
+            currency=row["currency"],
+            cik=row["cik"],
+            sector=row["sector"],
+            industry=row["industry"],
+            website=row["website"],
+        )
+
+    def market_series(
+        self,
+        security_id: UUID,
+        start: date | None = None,
+        end: date | None = None,
+        limit: int = 1000,
+    ) -> list[MarketSeriesPoint]:
+        bars = self.market_bars_for_security(security_id, start=start, end=end)
+        return [
+            MarketSeriesPoint(
+                observed_at=bar.observed_at,
+                open=bar.open,
+                high=bar.high,
+                low=bar.low,
+                close=bar.close,
+                adjusted_close=bar.adjusted_close,
+                volume=bar.volume,
+                provider=bar.provider,
+            )
+            for bar in bars[-limit:]
+        ]
+
     def latest_market_observation(self, security_id: UUID) -> date | None:
         row = self._connection.execute(
             "SELECT MAX(observed_at) AS latest_observation FROM market_bars WHERE security_id = ?",
@@ -652,6 +848,24 @@ class SQLiteStore:
             ),
         )
         self._connection.commit()
+
+    def get_outcome(self, forecast_id: UUID) -> OutcomeRecord | None:
+        row = self._connection.execute(
+            """
+            SELECT forecast_id, observed_at, realized_return, resolved_at, evaluation_status
+            FROM outcomes WHERE forecast_id = ?
+            """,
+            (str(forecast_id),),
+        ).fetchone()
+        if row is None:
+            return None
+        return OutcomeRecord(
+            forecast_id=UUID(row["forecast_id"]),
+            observed_at=datetime.fromisoformat(row["observed_at"]) if row["observed_at"] else None,
+            realized_return=row["realized_return"],
+            resolved_at=datetime.fromisoformat(row["resolved_at"]),
+            evaluation_status=row["evaluation_status"],
+        )
 
     def coverage(self) -> CoverageSummary:
         companies = int(self._connection.execute("SELECT COUNT(*) FROM companies").fetchone()[0])

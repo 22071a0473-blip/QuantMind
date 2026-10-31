@@ -100,6 +100,8 @@ The repository contains:
 | `scripts/ingest_universe.py` | Versioned Fortune 500 CSV ingestion and identity-resolution report |
 | `scripts/ingest_market.py` | Resumable single-security historical or incremental market ingestion |
 | `scripts/report_coverage.py` | Machine-readable canonical-store coverage report |
+| `scripts/historical_research.py` | Point-in-time features, analogue search, dossier, and walk-forward evaluation |
+| `scripts/resolve_outcome.py` | Deterministic forecast outcome resolution |
 | `data/universe.json` | Generated searchable asset catalog |
 | `data/known_events.csv` | Validated, source-linked curated catalyst labels |
 | `tests/` | Offline parser, analytics, universe, API, and memory-format tests |
@@ -343,13 +345,64 @@ The initial adapter uses Yahoo Finance for market history and SEC Company Facts
 for fundamentals. These sources are suitable for a reproducible hackathon
 prototype, not a claim of licensed institutional-grade market-data coverage.
 
+## Phase 3 historical research
+
+Phase 3 keeps numerical bars and feature snapshots in SQLite and uses Hindsight
+only for compact research memory. Features are computed by trading-session
+position, not calendar offsets, and use adjusted close when the provider
+supplies it. Every feature snapshot carries the `phase3-v1` definition version,
+price-basis label, source-bar count, and missing-feature list.
+
+Compute and persist features:
+
+```powershell
+uv run python scripts/historical_research.py features `
+  --ticker AAPL `
+  --database data/quantmind.db
+```
+
+Search historical analogues as of a strict decision date. The baseline uses
+standardized numerical distances, excludes the target observation, excludes
+information unavailable by the cutoff, and reports subsequent 1/5/20/60/120/252
+session outcomes when available:
+
+```powershell
+uv run python scripts/historical_research.py analogues `
+  --ticker AAPL `
+  --date 2025-01-15 `
+  --limit 10 `
+  --database data/quantmind.db
+```
+
+Generate a reproducible dossier or run the chronological baseline evaluation:
+
+```powershell
+uv run python scripts/historical_research.py dossier `
+  --ticker AAPL `
+  --date 2025-01-15 `
+  --database data/quantmind.db
+
+uv run python scripts/historical_research.py evaluate `
+  --ticker AAPL `
+  --horizon 20 `
+  --database data/quantmind.db
+```
+
+The evaluator reports sample counts, excluded observations, MAE, RMSE,
+directional accuracy, realized-return distribution, and explicit limitations.
+It is a transparent historical baseline, not a calibrated probability or
+profitability claim. Forecasts are resolved separately so censored or
+invalidated outcomes are not silently treated as failures or successes.
+
 ## API routes
 
 | Route | Description |
 |---|---|
 | `GET /api/health` | Service status and generated universe size |
 | `GET /api/search?q=...` | Ranked, grouped asset search |
+| `GET /api/query?q=...` | Deterministic intent, entity, metric and retrieval-strategy routing |
 | `GET /api/universe` | Typed asset catalog |
+| `GET /api/market/{ticker}` | Canonical OHLCV series, company profile and coverage metadata |
 | `GET /api/report/{ticker}?memory=true` | Research report |
 | `GET /api/signals/{ticker}` | Deterministic signal analysis |
 | `GET /api/memory/{ticker}` | Asset memory status and recalled precedents |
@@ -359,6 +412,26 @@ prototype, not a claim of licensed institutional-grade market-data coverage.
 
 The legacy `/research` page remains available while the React terminal is the
 primary flow.
+
+## Phase 4 research workspace
+
+The React workspace uses a restrained Bloomberg-style terminal layout: dense
+navigation, keyboard-first search, compact quote panels, tabular evidence and
+explicit data-quality states. It is intentionally not a trading terminal and
+does not invent prices, analyst targets or source metadata.
+
+The global search palette supports Ctrl+K/Cmd+K, recent searches, grouped
+canonical-universe results, keyboard navigation and a 150 ms debounce. Natural
+language questions are routed by `GET /api/query` before retrieval: recognizable
+tickers and metrics use deterministic structured paths, while broad questions
+advertise the lexical, structured and Hindsight strategies they require.
+
+The security workspace at `/stock/{ticker}` combines the live report with any
+stored canonical OHLCV history, confidence coverage, ranked movement drivers,
+source-linked news and Hindsight precedent. If the SQLite store has no series or
+the provider has no evidence, the UI labels that gap instead of displaying a
+placeholder value. Set `QUANTMIND_DATABASE` when the canonical store is not
+`data/quantmind.db`.
 
 ## Development checks
 

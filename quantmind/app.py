@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import re
+from datetime import date
 from html import escape
 from pathlib import Path
 
@@ -17,6 +19,8 @@ from .confidence_engine import ConfidenceAudit, ConfidenceEngine
 from .engine import QuantMindEngine
 from .llm import GroqResearcher
 from .memory import HindsightMemory
+from .search import ParsedQuery, parse_query
+from .storage import SQLiteStore
 from .universe import AssetKind, SearchResponse, UniverseAsset, list_universe, search_universe
 
 load_dotenv()
@@ -28,6 +32,10 @@ if not _WEB_DIST.is_dir():
     _WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
 if _WEB_DIST.is_dir():
     app.mount("/assets", StaticFiles(directory=_WEB_DIST / "assets"), name="web-assets")
+
+
+def build_store() -> SQLiteStore:
+    return SQLiteStore(Path(os.environ.get("QUANTMIND_DATABASE", "data/quantmind.db")))
 
 
 class AnalyzeRequest(BaseModel):
@@ -181,6 +189,43 @@ async def search(
     limit: int = Query(default=20, ge=1, le=50),
 ) -> SearchResponse:
     return search_universe(q, limit)
+
+
+@app.get("/api/query", response_model=ParsedQuery)
+async def query_understanding(q: str = Query(min_length=1, max_length=500)) -> ParsedQuery:
+    return parse_query(q)
+
+
+@app.get("/api/market/{ticker}")
+async def market_series(
+    ticker: str,
+    start: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    end: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    limit: int = Query(default=500, ge=1, le=5000),
+) -> dict[str, object]:
+    normalized = validate_ticker(ticker)
+    store = build_store()
+    try:
+        security = store.find_security(normalized)
+        if security is None:
+            return {"ticker": normalized, "available": False, "reason": "No canonical market series is stored."}
+        profile = store.company_profile(security.security_id)
+        points = store.market_series(
+            security.security_id,
+            start=date.fromisoformat(start) if start else None,
+            end=date.fromisoformat(end) if end else None,
+            limit=limit,
+        )
+        coverage = store.security_coverage(security.security_id, normalized)
+        return {
+            "ticker": normalized,
+            "available": bool(points),
+            "profile": profile.model_dump() if profile else None,
+            "coverage": coverage.model_dump(),
+            "points": [point.model_dump(mode="json") for point in points],
+        }
+    finally:
+        store.close()
 
 
 @app.get("/api/report/{ticker}")

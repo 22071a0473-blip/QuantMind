@@ -11,7 +11,8 @@ export function useSearch(): SearchContextValue {
   return context;
 }
 
-export function SearchProvider({ children, open, setOpen }: { children: ReactNode; open: boolean; setOpen: (value: boolean) => void }) {
+export function SearchProvider({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(false);
   const value = useMemo(() => ({ openSearch: () => setOpen(true), closeSearch: () => setOpen(false) }), [setOpen]);
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -78,7 +79,7 @@ export function SearchPalette() {
     if (event.key === "ArrowDown") setSelected((value) => Math.min(value + 1, Math.max(data.results.length - 1, 0)));
     if (event.key === "ArrowUp") setSelected((value) => Math.max(value - 1, 0));
     if (event.key === "Enter" && data.results[selected]) go(data.results[selected]);
-    if (event.key === "Escape") close();
+    if (event.key === "Escape") closeSearch();
   };
 
   const groups = data.results.reduce<Record<string, Asset[]>>((acc, asset) => {

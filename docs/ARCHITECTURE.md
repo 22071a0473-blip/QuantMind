@@ -19,6 +19,10 @@
    meta-insight.
 9. FastAPI returns the typed report to the React terminal or legacy `/research`
    page.
+10. The React workspace sends natural-language questions through
+    `quantmind.search.parse_query`, then uses the structured report and market
+    endpoints. The terminal never substitutes demo values when a provider or
+    canonical store is unavailable.
 
 ## Data boundaries
 
@@ -31,11 +35,21 @@
   migration remains a later phase.
 - `quantmind.temporal` is the shared point-in-time eligibility boundary for
   retrospective research and evaluation.
+- `quantmind.historical` computes versioned trading-session features, searches
+  transparent historical analogues, and runs chronological baseline evaluation.
+- `quantmind.outcomes` resolves forecast horizons into resolved, censored, or
+  invalidated outcomes without rewriting the original forecast.
+- `quantmind.search` performs deterministic query understanding for recognizable
+  entities and metrics before any future lexical, semantic or Hindsight
+  retrieval adapter is selected.
 
 ## Current limitations
 
-The repository currently uses yfinance and CoinGecko for live acquisition and
-does not yet provide the full relational canonical database, Fortune 500
-historical universe, filing/fundamental ingestion ledger, forecast outcome
-ledger, or walk-forward evaluation required by the master specifications.
-These are later implementation phases, not completed functionality.
+The repository still does not claim complete Fortune 500 coverage or
+institutional-grade provider coverage. Phase 3 provides the deterministic
+feature, analogue, outcome-resolution, dossier, and baseline evaluation
+surfaces for securities that have canonical market bars. Peer-universe
+comparison, full-text/semantic indexing, measured hybrid ranking and calibrated
+forecasting remain later work. Phase 4 now provides the terminal search and
+workspace surface, but it does not claim those later retrieval systems exist
+until they are backed by indexed source records and evaluation results.

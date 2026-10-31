@@ -40,3 +40,18 @@
 - **Operational consequence:** Incomplete provider timestamps appear as
   uncertainty and reduce eligible evidence.
 - **Reversal criteria:** None; temporal provenance is a correctness invariant.
+
+## ADR-004: Use a transparent baseline before complex analogue models
+
+- **Context:** Historical similarity can look predictive when feature timing
+  and overlapping outcomes are hidden.
+- **Decision:** Start with versioned trading-session features and Euclidean
+  distance over the shared finite features. Exclude target self-matches and
+  information unavailable at the decision cutoff.
+- **Trade-offs:** The baseline is interpretable and reproducible but does not
+  capture nonlinear relationships or establish calibrated probabilities.
+- **Operational consequence:** Every query stores its cutoff, feature version,
+  matching features, differences, and forward outcomes; later models can be
+  compared against this baseline.
+- **Reversal criteria:** Replace only after a walk-forward comparison shows a
+  reliable out-of-sample improvement without leakage.
