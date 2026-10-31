@@ -10,6 +10,7 @@ import yfinance as yf
 from pycoingecko import CoinGeckoAPI
 
 from .models import Evidence, MarketSnapshot, NewsItem
+from .temporal import ensure_utc
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +89,9 @@ class LiveMarketSources:
                 url=str(item.get("link", "")),
                 published=str(item.get("providerPublishTime", "")),
                 summary=str(item.get("summary", "")),
+                published_at=self._provider_timestamp(item.get("providerPublishTime")),
+                provider="Yahoo Finance",
+                temporal_uncertainty=not bool(item.get("providerPublishTime")),
             )
             for item in provider_news
             if item.get("link")
@@ -123,10 +127,22 @@ class LiveMarketSources:
                 url=item.url,
                 date=item.published,
                 snippet=item.summary or item.title,
+                published_at=item.published_at,
+                available_at=item.published_at,
+                temporal_uncertainty=item.temporal_uncertainty,
             )
             for item in news
         )
         return LiveResearchData(snapshot=snapshot, evidence=evidence, news=news, features=features)
+
+    @staticmethod
+    def _provider_timestamp(value: object) -> datetime | None:
+        if value is None:
+            return None
+        try:
+            return ensure_utc(datetime.fromtimestamp(float(value), tz=UTC))
+        except (TypeError, ValueError, OSError):
+            return None
 
     def _crypto(self, asset: str) -> LiveResearchData:
         coin_id = asset.lower().replace(" ", "-")

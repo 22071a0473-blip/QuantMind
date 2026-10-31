@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
@@ -10,6 +12,9 @@ class SourceCitation(BaseModel):
     source_url: str | None = None
     headline: str | None = None
     date: str
+    published_at: datetime | None = None
+    available_at: datetime | None = None
+    temporal_uncertainty: bool = False
 
 
 class Evidence(BaseModel):
@@ -17,6 +22,9 @@ class Evidence(BaseModel):
     url: str
     date: str
     snippet: str
+    published_at: datetime | None = None
+    available_at: datetime | None = None
+    temporal_uncertainty: bool = False
 
 
 class MarketSnapshot(BaseModel):
@@ -35,6 +43,9 @@ class NewsItem(BaseModel):
     url: str
     published: str
     summary: str
+    published_at: datetime | None = None
+    provider: str = "unknown"
+    temporal_uncertainty: bool = False
 
 
 class MemoryUsed(BaseModel):
@@ -151,8 +162,10 @@ class SignalResponse(BaseModel):
 
 
 class Report(BaseModel):
+    research_id: UUID = Field(default_factory=uuid4)
     asset: str
     generated_at: str
+    information_cutoff: datetime | None = None
     snapshot: MarketSnapshot
     factor_1_why_it_moved: list[Driver]
     factor_2_deep_research: DeepResearch

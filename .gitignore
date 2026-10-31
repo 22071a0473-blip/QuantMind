@@ -5,6 +5,7 @@
 *.pyo
 .DS_Store
 .env
+data/*.db
 
 web/node_modules/
 web/dist/

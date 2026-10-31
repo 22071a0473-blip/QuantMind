@@ -4,6 +4,7 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from uuid import uuid4
 
 from .analytics import AnalyticsResult, InstitutionalAnalytics
 from .confidence_engine import ConfidenceAudit, ConfidenceEngine
@@ -143,6 +144,12 @@ class QuantMindEngine:
             report.model_dump_json(),
             live.snapshot.change_pct,
             primary_reason,
+            research_id=report.research_id,
+            metadata={
+                "information_cutoff": report.information_cutoff.isoformat()
+                if report.information_cutoff
+                else report.generated_at,
+            },
         )
         report.memory_used.total_count = total
 
@@ -194,8 +201,10 @@ class QuantMindEngine:
         )
         vector_groups = {vector.value: int(audit.vector_scores[vector]) for vector in audit.vector_scores}
         return Report(
+            research_id=uuid4(),
             asset=live.snapshot.asset,
             generated_at=datetime.now(UTC).isoformat(),
+            information_cutoff=datetime.now(UTC),
             snapshot=live.snapshot,
             factor_1_why_it_moved=[driver],
             factor_2_deep_research=DeepResearch(

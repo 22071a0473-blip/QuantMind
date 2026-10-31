@@ -5,6 +5,7 @@ import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
+from uuid import UUID
 
 from hindsight_client import Hindsight
 
@@ -91,6 +92,7 @@ class HindsightMemory:
         report_json: str,
         price_change: float,
         primary_reason: str,
+        research_id: UUID | str | None = None,
         metadata: dict[str, str] | None = None,
     ) -> int:
         bank_id = self.bank_id(asset)
@@ -103,11 +105,15 @@ class HindsightMemory:
         }
         if metadata:
             retention_metadata.update(metadata)
+        document_id = f"research-{research_id}" if research_id else None
         await self._client.aretain(
             bank_id=bank_id,
             content=report_json,
             context="QuantMind market event and evidence-grounded report.",
+            document_id=document_id,
             metadata=retention_metadata,
+            tags=["research-report", f"ticker:{asset.upper()}", f"reason:{primary_reason}"],
+            update_mode="replace",
         )
         response = await self._client.alist_memories(bank_id=bank_id, type="market_event", limit=1)
         return response.total

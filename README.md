@@ -260,6 +260,32 @@ uv run python scripts/verify_memory.py
 The live backfill requires explicit credentials and should be run only after
 reviewing the dry-run output and checkpoint path.
 
+## Canonical local database
+
+The repository now includes a portable SQLite canonical store for normalized
+companies, securities, market bars, provenance, ingestion jobs, quality issues,
+research reports, forecasts, and resolved outcomes. Hindsight remains the
+semantic research-memory layer; it is not used as the numerical financial
+database.
+
+Initialize or inspect the local database with:
+
+```powershell
+uv run python scripts/init_database.py
+```
+
+By default this creates `data/quantmind.db`. The database is local runtime
+state and should not be committed. Use `--database` to select another path:
+
+```powershell
+uv run python scripts/init_database.py --database data/dev-quantmind.db
+```
+
+The current store is the persistence foundation for the planned incremental
+market, filing, fundamentals, forecast-resolution, and coverage jobs. Those
+jobs must populate it through typed records and idempotent upserts; the
+repository does not claim that full Fortune 500 ingestion is complete.
+
 ## API routes
 
 | Route | Description |
