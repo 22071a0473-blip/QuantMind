@@ -19,7 +19,7 @@ The Hindsight service itself was not configured in this environment, so cloud re
 
 ## Gate 1 — hypothesis ledger
 
-Status: implementation and offline verification in progress.
+Status: passed locally on 2026-03-10.
 
 - Append-only hypotheses use SQLite immutability triggers and deterministic
   record hashes.
@@ -31,3 +31,8 @@ Status: implementation and offline verification in progress.
   records abnormal return, Brier score, and log-loss.
 - The frontend exposes the ledger as a security-monitor tab with explicit
   commit, loading, error, and unavailable-data states.
+- Gate smoke test committed one `TEST` forecast, returned a verified detail,
+  returned paginated list metadata, and exposed the expected insufficient-data
+  calibration state.
+- Validation: 63 backend tests passed, Ruff passed, frontend typecheck passed,
+  and the production frontend build passed.
