@@ -7,6 +7,7 @@ from quantmind.storage import (
     DataQualityIssueRecord,
     MarketBarRecord,
     SecurityRecord,
+    ResearchReportRecord,
     SQLiteStore,
 )
 
@@ -54,5 +55,24 @@ def test_storage_preserves_quality_issues(tmp_path: Path) -> None:
         )
         store.record_quality_issue(issue)
         assert store.coverage().quality_issues == 1
+    finally:
+        store.close()
+
+
+def test_research_reports_are_searchable_without_an_external_service(tmp_path: Path) -> None:
+    store = SQLiteStore(tmp_path / "quantmind.db")
+    try:
+        report = ResearchReportRecord(
+            research_id=uuid4(),
+            information_cutoff=datetime(2026, 1, 2, tzinfo=UTC),
+            content_json='{"ticker":"AAPL","headline":"Services growth","body":"Apple services revenue expanded."}',
+        )
+        store.save_research_report(report)
+
+        results = store.search_research_reports('"services" AND "revenue"')
+
+        assert len(results) == 1
+        assert results[0].ticker == "AAPL"
+        assert results[0].source_type == "research_report"
     finally:
         store.close()

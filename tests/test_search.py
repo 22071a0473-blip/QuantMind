@@ -1,4 +1,4 @@
-from quantmind.search import parse_query
+from quantmind.search import fts_query, parse_query
 
 
 def test_query_router_uses_structured_strategy_for_market_metric() -> None:
@@ -16,3 +16,7 @@ def test_query_router_routes_historical_memory_questions() -> None:
     assert parsed.intent == "memory_recall"
     assert parsed.symbols == ["PLTR"]
     assert "hindsight_memory" in parsed.retrieval_strategy
+
+
+def test_fts_query_quotes_terms_and_ignores_punctuation() -> None:
+    assert fts_query("AAPL: contract win?") == '"aapl" AND "contract" AND "win"'

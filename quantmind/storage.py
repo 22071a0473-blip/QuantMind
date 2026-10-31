@@ -216,6 +216,17 @@ class JsonSnapshotRecord(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class ResearchSearchHit(BaseModel):
+    result_id: str
+    title: str
+    snippet: str
+    source_type: str
+    source_url: str | None = None
+    ticker: str | None = None
+    information_cutoff: datetime | None = None
+    score: float
+
+
 def _iso(value: date | datetime | None) -> str | None:
     if value is None:
         return None
@@ -360,6 +371,14 @@ class SQLiteStore:
                 payload TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 PRIMARY KEY(snapshot_type, snapshot_id)
+            );
+            CREATE VIRTUAL TABLE IF NOT EXISTS research_search USING fts5(
+                result_id UNINDEXED,
+                title,
+                content,
+                source_url UNINDEXED,
+                ticker UNINDEXED,
+                information_cutoff UNINDEXED
             );
             CREATE INDEX IF NOT EXISTS idx_market_bars_security_date
                 ON market_bars(security_id, observed_at);
@@ -808,7 +827,58 @@ class SQLiteStore:
                 report.validation_status,
             ),
         )
+        self._connection.execute("DELETE FROM research_search WHERE result_id = ?", (str(report.research_id),))
+        try:
+            payload = json.loads(report.content_json)
+        except json.JSONDecodeError:
+            payload = {"content": report.content_json}
+        title = str(payload.get("asset") or payload.get("ticker") or "QuantMind research report")
+        content = json.dumps(payload, ensure_ascii=False)
+        ticker = str(payload.get("ticker") or payload.get("asset") or "")
+        self._connection.execute(
+            """
+            INSERT INTO research_search(
+                result_id, title, content, source_url, ticker, information_cutoff
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(report.research_id),
+                title,
+                content,
+                None,
+                ticker.upper() or None,
+                _iso(report.information_cutoff),
+            ),
+        )
         self._connection.commit()
+
+    def search_research_reports(self, query: str, limit: int = 20) -> list[ResearchSearchHit]:
+        rows = self._connection.execute(
+            """
+            SELECT result_id, title, snippet(research_search, 2, '<mark>', '</mark>', ' … ', 28) AS excerpt,
+                   source_url, ticker, information_cutoff, bm25(research_search) AS rank
+            FROM research_search
+            WHERE research_search MATCH ?
+            ORDER BY rank
+            LIMIT ?
+            """,
+            (query, limit),
+        ).fetchall()
+        return [
+            ResearchSearchHit(
+                result_id=str(row["result_id"]),
+                title=str(row["title"]),
+                snippet=str(row["excerpt"]),
+                source_type="research_report",
+                source_url=row["source_url"],
+                ticker=row["ticker"],
+                information_cutoff=ensure_utc(datetime.fromisoformat(row["information_cutoff"]))
+                if row["information_cutoff"]
+                else None,
+                score=1.0 / (1.0 + max(float(row["rank"]), 0.0)),
+            )
+            for row in rows
+        ]
 
     def save_forecast(self, forecast: ForecastRecord) -> None:
         self._connection.execute(

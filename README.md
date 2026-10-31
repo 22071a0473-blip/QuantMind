@@ -406,6 +406,31 @@ forward returns, universe parsing, query routing, temporal eligibility,
 historical features, idempotent storage, configuration, and the analysis
 graph.
 
+## Phase 4 search and memory verification
+
+Research search executes across the canonical asset universe, locally persisted
+research reports and the shared Hindsight event bank:
+
+```text
+GET /api/search/research?q=why%20did%20AAPL%20move
+```
+
+The response includes parsed intent, typed results, source labels, scores,
+Hindsight availability and warnings when an external source is unavailable.
+Local lexical results remain usable when Hindsight is not configured.
+
+Before claiming that memory retrieval is operational, run:
+
+```powershell
+python scripts/verify_memory.py --json
+```
+
+The probe checks configuration, bank access, a marked write, recall, repeated
+document-ID behavior and temporal-query support without printing credentials.
+The installed Hindsight SDK currently does not expose public deletion or
+operation-status methods, so use a disposable verification bank when cleanup
+is required.
+
 ## Deployment
 
 The repository includes Docker and Render configuration:

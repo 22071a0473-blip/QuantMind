@@ -32,6 +32,27 @@ class ParsedQuery(BaseModel):
     clarification: str | None = None
 
 
+class SearchResult(BaseModel):
+    result_id: str
+    title: str
+    snippet: str
+    source_type: str
+    source_url: str | None = None
+    ticker: str | None = None
+    score: float
+    available_at: date | None = None
+
+
+class SearchExecution(BaseModel):
+    query: str
+    parsed: ParsedQuery
+    results: list[SearchResult] = Field(default_factory=list)
+    lexical_count: int = 0
+    memory_count: int = 0
+    memory_status: Literal["verified", "unavailable", "not_configured"] = "not_configured"
+    warnings: list[str] = Field(default_factory=list)
+
+
 _METRICS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("return", ("return", "performance", "gain", "loss")),
     ("drawdown", ("drawdown", "peak to trough")),
@@ -93,3 +114,9 @@ def parse_query(query: str) -> ParsedQuery:
         retrieval_strategy=strategy,
         clarification=clarification,
     )
+
+
+def fts_query(query: str) -> str:
+    """Build a conservative FTS query so punctuation cannot change the MATCH grammar."""
+    tokens = re.findall(r"[A-Za-z0-9][A-Za-z0-9_-]*", query.casefold())
+    return " AND ".join(f'"{token}"' for token in tokens)

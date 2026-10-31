@@ -5,6 +5,7 @@ import re
 from datetime import date
 from html import escape
 from pathlib import Path
+from typing import Literal
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Form, HTTPException, Query, Request
@@ -17,9 +18,10 @@ from starlette.staticfiles import StaticFiles
 from .agent_graph import AgentGraph, AgentState
 from .confidence_engine import ConfidenceAudit, ConfidenceEngine
 from .engine import QuantMindEngine
+from .event_memory import QuantMindEventMemory
 from .llm import GroqResearcher
 from .memory import HindsightMemory
-from .search import ParsedQuery, parse_query
+from .search import ParsedQuery, SearchExecution, SearchResult, fts_query, parse_query
 from .storage import SQLiteStore
 from .universe import AssetKind, SearchResponse, UniverseAsset, list_universe, search_universe
 
@@ -194,6 +196,81 @@ async def search(
 @app.get("/api/query", response_model=ParsedQuery)
 async def query_understanding(q: str = Query(min_length=1, max_length=500)) -> ParsedQuery:
     return parse_query(q)
+
+
+@app.get("/api/search/research", response_model=SearchExecution)
+async def research_search(
+    q: str = Query(min_length=1, max_length=500),
+    limit: int = Query(default=20, ge=1, le=50),
+) -> SearchExecution:
+    parsed = parse_query(q)
+    store = build_store()
+    warnings: list[str] = []
+    lexical_results: list[SearchResult] = []
+    try:
+        safe_query = fts_query(q)
+        if safe_query:
+            lexical_results = [
+                SearchResult(
+                    result_id=hit.result_id,
+                    title=hit.title,
+                    snippet=hit.snippet,
+                    source_type=hit.source_type,
+                    source_url=hit.source_url,
+                    ticker=hit.ticker,
+                    score=hit.score,
+                    available_at=hit.information_cutoff.date() if hit.information_cutoff else None,
+                )
+                for hit in store.search_research_reports(safe_query, limit)
+            ]
+    finally:
+        store.close()
+
+    memory_results: list[SearchResult] = []
+    memory_status: Literal["verified", "unavailable", "not_configured"] = "not_configured"
+    try:
+        memory_results = [
+            SearchResult(
+                result_id=hit.result_id,
+                title=hit.title,
+                snippet=hit.snippet,
+                source_type="hindsight_event",
+                source_url=hit.source_url,
+                ticker=hit.ticker,
+                score=hit.score,
+            )
+            for hit in await QuantMindEventMemory().search(q, limit)
+        ]
+        memory_status = "verified"
+    except KeyError:
+        warnings.append("Hindsight is not configured; local research results are shown.")
+        memory_status = "not_configured"
+    except Exception:
+        warnings.append("Hindsight is unavailable; local research results are shown.")
+        memory_status = "unavailable"
+
+    structured_results = [
+        SearchResult(
+            result_id=f"asset:{asset.symbol}",
+            title=asset.name,
+            snippet=f"{asset.symbol} · {asset.sector or 'Unknown sector'}",
+            source_type="structured_asset",
+            ticker=asset.symbol,
+            score=1.0,
+        )
+        for asset in search_universe(q, limit).results
+    ]
+    combined = structured_results + lexical_results + memory_results
+    combined.sort(key=lambda result: result.score, reverse=True)
+    return SearchExecution(
+        query=q,
+        parsed=parsed,
+        results=combined[:limit],
+        lexical_count=len(lexical_results),
+        memory_count=len(memory_results),
+        memory_status=memory_status,
+        warnings=warnings,
+    )
 
 
 @app.get("/api/market/{ticker}")

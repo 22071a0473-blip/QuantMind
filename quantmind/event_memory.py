@@ -3,11 +3,22 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from hindsight_client import Hindsight
 
 EVENTS_BANK_ID = "quantmind-events"
+
+
+@dataclass(slots=True)
+class EventMemoryHit:
+    result_id: str
+    title: str
+    snippet: str
+    source_url: str | None
+    ticker: str | None
+    score: float
 
 
 class QuantMindEventMemory:
@@ -41,3 +52,29 @@ class QuantMindEventMemory:
             operation_id=operation_id,
         )
         return response.items_count
+
+    async def search(self, query: str, limit: int = 20) -> list[EventMemoryHit]:
+        await self.ensure_bank()
+        response = await self._client.arecall(
+            bank_id=EVENTS_BANK_ID,
+            query=query,
+            budget="low",
+            max_tokens=3000,
+            include_chunks=True,
+        )
+        hits: list[EventMemoryHit] = []
+        for index, result in enumerate(response.results[:limit]):
+            metadata = getattr(result, "metadata", None) or {}
+            ticker = metadata.get("ticker") if isinstance(metadata, dict) else None
+            source_url = metadata.get("source_url") if isinstance(metadata, dict) else None
+            hits.append(
+                EventMemoryHit(
+                    result_id=str(getattr(result, "document_id", None) or f"memory-{index}"),
+                    title=str(metadata.get("headline") if isinstance(metadata, dict) else "Historical market event"),
+                    snippet=result.text,
+                    source_url=str(source_url) if source_url else None,
+                    ticker=str(ticker) if ticker else None,
+                    score=max(0.0, 1.0 - index / max(len(response.results), 1)),
+                )
+            )
+        return hits
