@@ -51,13 +51,14 @@ class InstitutionalAnalytics:
                 explanation=f"Observed {name} from {source}; it measures current movement context.",
             )
             for name, value, weight, source in definitions
+            if value is not None
         ]
         move = self.features.return_1d
         volume = self.features.volume_ratio
-        if move >= 1 and volume >= 1.5:
+        if move is not None and volume is not None and move >= 1 and volume >= 1.5:
             regime = "catalyst_expansion"
             explanation = "Positive move with abnormal volume indicates information arrival."
-        elif move <= -1 and volume >= 1.5:
+        elif move is not None and volume is not None and move <= -1 and volume >= 1.5:
             regime = "catalyst_stress"
             explanation = "Negative move with abnormal volume indicates stress or negative information."
         else:
@@ -88,6 +89,7 @@ class InstitutionalAnalytics:
         )
 
     @staticmethod
-    def _score(values: list[float]) -> int:
-        magnitude = sum(abs(value) for value in values) / max(len(values), 1)
+    def _score(values: list[float | None]) -> int:
+        available = [value for value in values if value is not None]
+        magnitude = sum(abs(value) for value in available) / max(len(available), 1)
         return max(0, min(100, round(50 + magnitude * 2)))

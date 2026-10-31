@@ -16,11 +16,10 @@ def test_report_contract_requires_live_snapshot() -> None:
     assert snapshot.asset == "PLTR"
 
 
-def test_hindsight_requires_cloud_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_hindsight_can_run_without_cloud_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("HINDSIGHT_API_URL", raising=False)
     monkeypatch.delenv("HINDSIGHT_API_TOKEN", raising=False)
-    with pytest.raises(KeyError):
-        HindsightMemory()
+    assert HindsightMemory().configured is False
 
 
 def test_report_disclaimer_is_fixed() -> None:
@@ -29,24 +28,26 @@ def test_report_disclaimer_is_fixed() -> None:
 
 def test_precedent_extracts_retained_report_event() -> None:
     record = MemoryRecord(
-        text='{"generated_at":"2026-09-25T12:00:00Z","snapshot":{"change_pct":6.2},"factor_1_why_it_moved":[{"category":"Contract"}]}',
+        text=(
+            "PLTR moved 6.20% on 2026-09-25. Primary observed driver: contract award.\n"
+            "[EVENT] date=2026-09-25 change_pct=6.2000 reason=contract_win forward_5d=unavailable"
+        ),
         date=None,
     )
     precedent = summarize_precedent("PLTR", [record])
     assert precedent.count == 1
     assert precedent.moves[0].date == "2026-09-25"
-    assert precedent.moves[0].reason == "Contract"
+    assert precedent.moves[0].reason == "contract win"
 
 
-def test_precedent_extracts_seeded_thesis_outcome() -> None:
+def test_precedent_does_not_infer_unverified_outcome() -> None:
     record = MemoryRecord(
         text=(
-            '{"generated_at":"2026-09-25","snapshot":{"change_pct":18},'
-            '"factor_1_why_it_moved":[{"category":"DoD AI TITAN Contract Win"}],'
-            '"memory_thesis":{"outcome":"+18% over 30 days"}}'
+            "PLTR moved 18.00% on 2026-09-25. Primary observed driver: contract win.\n"
+            "[EVENT] date=2026-09-25 change_pct=18.0000 reason=contract_win forward_5d=unavailable"
         ),
         date=None,
     )
     precedent = summarize_precedent("PLTR", [record])
-    assert precedent.moves[0].reason == "DoD AI TITAN Contract Win"
-    assert precedent.moves[0].outcome == "+18% over 30 days"
+    assert precedent.moves[0].reason == "contract win"
+    assert precedent.moves[0].outcome is None

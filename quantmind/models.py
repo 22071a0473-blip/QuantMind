@@ -53,7 +53,7 @@ class MemoryUsed(BaseModel):
     recalled_count: int = Field(ge=0)
     total_count: int = Field(ge=0)
     patterns: list[str]
-    backend: Literal["hindsight-cloud"] = "hindsight-cloud"
+    backend: Literal["hindsight-cloud", "unavailable"] = "unavailable"
 
 
 class Driver(BaseModel):
@@ -175,8 +175,5 @@ class Report(BaseModel):
     extended_analysis: ExtendedAnalysis
     memory_used: MemoryUsed
     live_news: list[NewsItem]
-    memory_impact: str | None = None
     warning: str | None = None
-    disclaimer: Literal["Research tool, not financial advice."] = (
-        "Research tool, not financial advice."
-    )
+    disclaimer: Literal["Research tool, not financial advice."] = "Research tool, not financial advice."

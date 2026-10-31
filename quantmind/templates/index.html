@@ -36,7 +36,6 @@
   {% if report %}
   <div class="toggle"><a href="/research?asset={{ report.asset }}&memory=true" class="button active">With Memory ✅</a><a href="/research?asset={{ report.asset }}&memory=false" class="button">Without Memory</a><span class="muted">Compare the same live evidence with and without Hindsight recall.</span></div>
   <p class="muted">This report used {{ report.memory_used.recalled_count }} recalled patterns and {{ report.memory_used.total_count }} total memories for this ticker.</p>
-  {% if report.memory_impact %}<div class="card"><b>Memory Impact:</b> {{ report.memory_impact }}</div>{% endif %}
   <div class="card"><b>Memory comparison:</b> With Memory recalls {{ report.memory_used.recalled_count }} precedent(s); use
     <a href="/research?asset={{ report.asset }}&memory=false">Without Memory</a> to show the controlled baseline.
   </div>

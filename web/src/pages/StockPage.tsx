@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { fetchMarket, fetchReport, type MarketPoint, type MarketResponse, type Report } from "../lib/api";
+import { fetchHealth, fetchMarket, fetchReport, type HealthResponse, type MarketPoint, type MarketResponse, type Report } from "../lib/api";
 
 function formatNumber(value: number | null | undefined, digits = 2): string {
   return value == null || !Number.isFinite(value) ? "—" : value.toLocaleString(undefined, { maximumFractionDigits: digits });
@@ -41,14 +41,15 @@ export function StockPage() {
   const ticker = symbol.toUpperCase();
   const [report, setReport] = useState<Report | null>(null);
   const [market, setMarket] = useState<MarketResponse | null>(null);
+  const [health, setHealth] = useState<HealthResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"overview" | "evidence" | "memory">("overview");
 
   useEffect(() => {
     const controller = new AbortController();
     setError(null);
-    Promise.all([fetchReport(ticker, controller.signal), fetchMarket(ticker, controller.signal)])
-      .then(([nextReport, nextMarket]) => { setReport(nextReport); setMarket(nextMarket); })
+    Promise.all([fetchReport(ticker, controller.signal), fetchMarket(ticker, controller.signal), fetchHealth(controller.signal)])
+      .then(([nextReport, nextMarket, nextHealth]) => { setReport(nextReport); setMarket(nextMarket); setHealth(nextHealth); })
       .catch((reason: unknown) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Research unavailable"); });
     return () => controller.abort();
   }, [ticker]);
@@ -60,7 +61,7 @@ export function StockPage() {
 
   return (
     <section className="workspace">
-      <div className="crumb"><Link to="/">WORKSPACE</Link><span>/</span><strong>{ticker}</strong><span className="live-dot">● LIVE PROVIDER</span></div>
+      <div className="crumb"><Link to="/">WORKSPACE</Link><span>/</span><strong>{ticker}</strong><span className="live-dot">● {health?.database === "ok" ? "LIVE DATA" : "DATA DEGRADED"}</span></div>
       <div className="security-head">
         <div><p className="eyebrow">SECURITY MONITOR</p><h1>{ticker}</h1><p className="company-name">{profile?.legal_name ?? report.factor_2_deep_research.company} · {profile?.exchange ?? "MARKET DATA"}</p></div>
         <div className="quote"><strong>{latest ? formatNumber(latest.adjusted_close ?? latest.close) : formatNumber(report.snapshot.price)}</strong><span className={report.snapshot.change_pct >= 0 ? "positive" : "negative"}>{formatPercent(report.snapshot.change_pct)}</span><small>{report.snapshot.history_days} sessions in live provider</small></div>

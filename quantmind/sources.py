@@ -25,18 +25,18 @@ class LiveResearchData:
 
 @dataclass(slots=True)
 class MarketFeatures:
-    return_1d: float
-    return_5d: float
-    return_20d: float
-    volatility_20d: float
-    volume_ratio: float
-    drawdown_1y: float
-    momentum_20d: float
-    trend_slope: float
-    price_vs_sma20: float
-    price_vs_sma50: float
-    high_low_position: float
-    news_count: float
+    return_1d: float | None
+    return_5d: float | None
+    return_20d: float | None
+    volatility_20d: float | None
+    volume_ratio: float | None
+    drawdown_1y: float | None
+    momentum_20d: float | None
+    trend_slope: float | None
+    price_vs_sma20: float | None
+    price_vs_sma50: float | None
+    high_low_position: float | None
+    news_count: float | None
 
 
 class LiveMarketSources:
@@ -82,26 +82,13 @@ class LiveMarketSources:
             # usable price history when only the news request fails.
             logger.warning("Yahoo news unavailable for %s: %s", ticker_symbol, exc)
             provider_news = []
-        news = [
-            NewsItem(
-                title=str(item.get("title", "Untitled")),
-                publisher=str(item.get("publisher", "Unknown")),
-                url=str(item.get("link", "")),
-                published=str(item.get("providerPublishTime", "")),
-                summary=str(item.get("summary", "")),
-                published_at=self._provider_timestamp(item.get("providerPublishTime")),
-                provider="Yahoo Finance",
-                temporal_uncertainty=not bool(item.get("providerPublishTime")),
-            )
-            for item in provider_news
-            if item.get("link")
-        ]
+        news = self._normalize_news(provider_news)
         features = MarketFeatures(
             return_1d=snapshot.change_pct,
-            return_5d=float((close.iloc[-1] / close.iloc[-6] - 1) * 100) if len(close) > 5 else snapshot.change_pct,
-            return_20d=float((close.iloc[-1] / close.iloc[-21] - 1) * 100) if len(close) > 20 else snapshot.change_pct,
+            return_5d=float((close.iloc[-1] / close.iloc[-6] - 1) * 100) if len(close) > 5 else None,
+            return_20d=float((close.iloc[-1] / close.iloc[-21] - 1) * 100) if len(close) > 20 else None,
             volatility_20d=float(returns.tail(20).std() * 100),
-            volume_ratio=snapshot.volume_ratio or 1,
+            volume_ratio=snapshot.volume_ratio,
             drawdown_1y=float((latest_price / year_high - 1) * 100),
             momentum_20d=float(returns.tail(20).mean() * 100),
             trend_slope=float((close.tail(20).iloc[-1] - close.tail(20).iloc[0]) / max(sma20, 0.0001) * 100),
@@ -135,11 +122,39 @@ class LiveMarketSources:
         )
         return LiveResearchData(snapshot=snapshot, evidence=evidence, news=news, features=features)
 
+    @classmethod
+    def _normalize_news(cls, items: list[dict[str, Any]]) -> list[NewsItem]:
+        normalized: list[NewsItem] = []
+        for item in items:
+            content = item.get("content")
+            payload = content if isinstance(content, dict) else item
+            link = payload.get("canonicalUrl") or payload.get("link") or item.get("link")
+            if isinstance(link, dict):
+                link = link.get("url")
+            if not link:
+                continue
+            timestamp = payload.get("pubDate") or payload.get("providerPublishTime") or item.get("providerPublishTime")
+            normalized.append(
+                NewsItem(
+                    title=str(payload.get("title", "Untitled")),
+                    publisher=str(payload.get("provider", payload.get("publisher", "Unknown"))),
+                    url=str(link),
+                    published=str(timestamp or ""),
+                    summary=str(payload.get("summary", "")),
+                    published_at=cls._provider_timestamp(timestamp),
+                    provider="Yahoo Finance",
+                    temporal_uncertainty=not bool(timestamp),
+                )
+            )
+        return normalized
+
     @staticmethod
     def _provider_timestamp(value: object) -> datetime | None:
         if value is None:
             return None
         try:
+            if isinstance(value, str) and "T" in value:
+                return ensure_utc(datetime.fromisoformat(value.replace("Z", "+00:00")))
             return ensure_utc(datetime.fromtimestamp(float(value), tz=UTC))
         except (TypeError, ValueError, OSError):
             return None
@@ -149,12 +164,16 @@ class LiveMarketSources:
         data = CoinGeckoAPI().get_coin_by_id(coin_id, localization=False, tickers=False, market_data=True)
         market = data["market_data"]
         price = float(market["current_price"]["usd"])
-        change = float(market.get("price_change_percentage_24h", 0))
+        change = (
+            float(market["price_change_percentage_24h"])
+            if market.get("price_change_percentage_24h") is not None
+            else None
+        )
         snapshot = MarketSnapshot(
             asset=f"CRYPTO:{coin_id}",
             kind="crypto",
             price=price,
-            change_pct=change,
+            change_pct=change or 0.0,
             volume_ratio=None,
             market_cap=float(market["market_cap"]["usd"]),
             history_days=365,
@@ -164,21 +183,25 @@ class LiveMarketSources:
                 source="CoinGecko",
                 url=f"https://www.coingecko.com/en/coins/{coin_id}",
                 date=datetime.now(UTC).date().isoformat(),
-                snippet=f"{coin_id} live USD price {price:.4f}; 24-hour change {change:.2f}%.",
+                snippet=(
+                    f"{coin_id} live USD price {price:.4f}; 24-hour change {change:.2f}%."
+                    if change is not None
+                    else f"{coin_id} live USD price {price:.4f}; 24-hour change unavailable."
+                ),
             )
         ]
         features = MarketFeatures(
             return_1d=change,
-            return_5d=change,
-            return_20d=change,
-            volatility_20d=0,
-            volume_ratio=1,
-            drawdown_1y=float(market.get("ath_change_percentage", {}).get("usd", 0)),
-            momentum_20d=change,
-            trend_slope=change,
-            price_vs_sma20=change,
-            price_vs_sma50=change,
-            high_low_position=50,
+            return_5d=None,
+            return_20d=None,
+            volatility_20d=None,
+            volume_ratio=None,
+            drawdown_1y=None,
+            momentum_20d=None,
+            trend_slope=None,
+            price_vs_sma20=None,
+            price_vs_sma50=None,
+            high_low_position=None,
             news_count=0,
         )
         return LiveResearchData(snapshot=snapshot, evidence=evidence, news=[], features=features)

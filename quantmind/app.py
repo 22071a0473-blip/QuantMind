@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import re
+import threading
+import time
+from dataclasses import dataclass
 from datetime import date
 from html import escape
 from pathlib import Path
@@ -34,6 +38,20 @@ if not _WEB_DIST.is_dir():
     _WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
 if _WEB_DIST.is_dir():
     app.mount("/assets", StaticFiles(directory=_WEB_DIST / "assets"), name="web-assets")
+
+
+@dataclass(slots=True)
+class CachedReport:
+    expires_at: float
+    payload: dict[str, object]
+
+
+_REPORT_CACHE: dict[str, CachedReport] = {}
+_REQUEST_TIMES: dict[str, list[float]] = {}
+_CACHE_TTL_SECONDS = 300.0
+_RATE_WINDOW_SECONDS = 60.0
+_RATE_LIMIT_PER_IP = 30
+_STATE_LOCK = threading.Lock()
 
 
 def build_store() -> SQLiteStore:
@@ -73,10 +91,20 @@ async def api_error_handler(request: Request, exc: StarletteHTTPException) -> JS
 
 
 def build_engine() -> QuantMindEngine:
-    try:
-        return QuantMindEngine(HindsightMemory(), GroqResearcher())
-    except KeyError as exc:
-        raise HTTPException(status_code=503, detail=f"Missing required environment variable: {exc.args[0]}") from exc
+    return QuantMindEngine(HindsightMemory(), GroqResearcher())
+
+
+def enforce_rate_limit(request: Request) -> None:
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.monotonic()
+    with _STATE_LOCK:
+        recent = [
+            timestamp for timestamp in _REQUEST_TIMES.get(client_ip, []) if now - timestamp < _RATE_WINDOW_SECONDS
+        ]
+        if len(recent) >= _RATE_LIMIT_PER_IP:
+            raise HTTPException(status_code=429, detail="Rate limit exceeded; retry shortly.")
+        recent.append(now)
+        _REQUEST_TIMES[client_ip] = recent
 
 
 def validate_ticker(ticker: str) -> str:
@@ -114,13 +142,16 @@ async def research(
     asset: str = Form(min_length=1, max_length=40),
     target_price: float | None = Form(default=None, gt=0),
 ) -> HTMLResponse:
+    enforce_rate_limit(request)
     try:
-        result = await build_engine().research(validate_ticker(asset))
+        result = await build_engine().research(validate_ticker(asset), persist_memory=True)
         if target_price is not None:
             result.report.extended_analysis.roadmap.success_definition += (
                 f" Scenario input {target_price:.4f}; this is not a prediction."
             )
-        return templates.TemplateResponse(request=request, name="index.html", context={"report": result.report, "error": None})
+        return templates.TemplateResponse(
+            request=request, name="index.html", context={"report": result.report, "error": None}
+        )
     except HTTPException as exc:
         return templates.TemplateResponse(
             request=request,
@@ -143,9 +174,16 @@ async def research_get(
     asset: str = Query(min_length=1, max_length=40),
     memory: bool = True,
 ) -> HTMLResponse:
+    enforce_rate_limit(request)
     try:
-        result = await build_engine().research(validate_ticker(asset), memory_enabled=memory)
-        return templates.TemplateResponse(request=request, name="index.html", context={"report": result.report, "error": None})
+        result = await build_engine().research(
+            validate_ticker(asset),
+            memory_enabled=memory,
+            persist_memory=False,
+        )
+        return templates.TemplateResponse(
+            request=request, name="index.html", context={"report": result.report, "error": None}
+        )
     except HTTPException as exc:
         return templates.TemplateResponse(
             request=request,
@@ -163,20 +201,40 @@ async def research_get(
 
 
 @app.get("/api/health")
-async def health() -> dict[str, str | int]:
-    build_engine()
+async def health() -> dict[str, object]:
+    engine = build_engine()
+    database = "ok"
+    try:
+        store = build_store()
+        store.close()
+    except Exception:
+        database = "unavailable"
+    hindsight = "not_configured"
+    if engine.memory.configured:
+        try:
+            await asyncio.wait_for(engine.memory.health_check(), timeout=3.0)
+            hindsight = "ok"
+        except Exception:
+            hindsight = "unavailable"
     return {
-        "status": "ok",
+        "status": "ok" if database == "ok" else "degraded",
         "service": "quantmind",
-        "memory": "hindsight-cloud",
-        "llm": "groq",
+        "database": database,
+        "memory": hindsight,
+        "llm": "configured" if GroqResearcher().configured else "not_configured",
         "universe_size": len(list_universe()),
     }
 
 
 @app.get("/api/memory/status")
 async def memory_status() -> dict[str, str]:
-    build_engine()
+    engine = build_engine()
+    if not engine.memory.configured:
+        return {"backend": "hindsight-cloud", "status": "not_configured"}
+    try:
+        await asyncio.wait_for(engine.memory.health_check(), timeout=3.0)
+    except Exception:
+        return {"backend": "hindsight-cloud", "status": "unavailable"}
     return {"backend": "hindsight-cloud", "status": "configured"}
 
 
@@ -307,19 +365,30 @@ async def market_series(
 
 @app.get("/api/report/{ticker}")
 async def report(
+    request: Request,
     ticker: str,
-    date: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
     memory: bool = True,
 ) -> dict:
-    del date  # The live providers expose the current session; the query is retained for API compatibility.
+    enforce_rate_limit(request)
     normalized = validate_ticker(ticker)
+    cache_key = f"{normalized}:{memory}"
+    with _STATE_LOCK:
+        cached = _REPORT_CACHE.get(cache_key)
+        if cached and cached.expires_at > time.monotonic():
+            return cached.payload
     try:
-        result = await build_engine().research(normalized, memory_enabled=memory)
+        result = await build_engine().research(normalized, memory_enabled=memory, persist_memory=False)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=f"No price data for {normalized}: {exc}") from exc
     except Exception as exc:
         raise HTTPException(status_code=503, detail="Memory backend unavailable") from exc
-    return result.report.model_dump()
+    payload = result.report.model_dump()
+    with _STATE_LOCK:
+        _REPORT_CACHE[cache_key] = CachedReport(
+            expires_at=time.monotonic() + _CACHE_TTL_SECONDS,
+            payload=payload,
+        )
+    return payload
 
 
 @app.post("/analyze", response_model=AnalyzeResponse)
@@ -328,9 +397,7 @@ async def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
     normalized = validate_ticker(request.asset)
     engine = build_engine()
     graph = AgentGraph(engine.sources, engine.memory)
-    state = await graph.run(
-        AgentState(asset=normalized, query=request.query, memory_enabled=request.memory)
-    )
+    state = await graph.run(AgentState(asset=normalized, query=request.query, memory_enabled=request.memory))
     if state.phase.value == "failed":
         raise HTTPException(status_code=503, detail="Research graph failed")
     observations: dict[str, float | None] = {}
@@ -401,10 +468,14 @@ async def reflect_for_ticker(ticker: str, query: str) -> dict[str, str]:
 
 
 @app.get("/api/reflect/{ticker}")
-async def reflect_get(ticker: str, query: str = "What patterns emerge from this ticker's historical moves?") -> dict[str, str]:
+async def reflect_get(
+    ticker: str, query: str = "What patterns emerge from this ticker's historical moves?"
+) -> dict[str, str]:
     return await reflect_for_ticker(ticker, query)
 
 
 @app.post("/api/reflect/{ticker}")
-async def reflect_post(ticker: str, query: str = "What patterns emerge from this ticker's historical moves?") -> dict[str, str]:
+async def reflect_post(
+    ticker: str, query: str = "What patterns emerge from this ticker's historical moves?"
+) -> dict[str, str]:
     return await reflect_for_ticker(ticker, query)

@@ -67,16 +67,22 @@ class QuantMindEngine:
             memory_count=len(recalled.records),
         ).calculate()
 
-    async def research(self, asset: str, memory_enabled: bool = True) -> ResearchResult:
+    async def research(
+        self,
+        asset: str,
+        memory_enabled: bool = True,
+        persist_memory: bool = True,
+    ) -> ResearchResult:
         live = await self._sources.gather(asset)
         query_keywords = (
             " ".join(item.title for item in live.news[:3])
             if live.news
             else f"{live.snapshot.asset} price volume movement catalyst"
         )
+        hindsight_available = memory_enabled and self._memory.configured
         recalled = (
             await self._memory.recall(live.snapshot.asset, query_keywords)
-            if memory_enabled
+            if hindsight_available
             else RecalledMemory(
                 bank_id=self._memory.bank_id(live.snapshot.asset),
                 records=[],
@@ -102,16 +108,12 @@ class QuantMindEngine:
             "news_count": features.news_count,
             "news_recency": 100.0 if features.news_count else None,
             "event_clarity": 100.0 if features.news_count else 0.0,
-            "memory_precedent": min(100.0, precedent.count * 25) if memory_enabled and precedent.count else 0.0,
+            "memory_precedent": min(100.0, precedent.count * 25) if hindsight_available and precedent.count else 0.0,
             "catalyst": 100.0 if live.news else 0.0,
         }
         audit = self._confidence_engine.evaluate(observations)
 
-        if not memory_enabled:
-            audit.score = max(0, int(audit.score * 0.75))
-            audit.explanation += " [Penalty applied: Hindsight Memory disabled]"
-
-        deterministic = self._deterministic_report(live, recalled, precedent, audit, memory_enabled)
+        deterministic = self._deterministic_report(live, recalled, precedent, audit, hindsight_available)
         try:
             report = await self._researcher.synthesize(
                 live.snapshot.asset,
@@ -132,36 +134,51 @@ class QuantMindEngine:
 
         report.historical_precedent = precedent
         report.confidence_meter = deterministic.confidence_meter
-        if memory_enabled and precedent.count:
-            report.memory_impact = (
-                "Hindsight memory improved this report. Without it, Factor 4 would be empty "
-                "and the deterministic confidence score would be significantly lower."
+        if persist_memory and self._memory.configured:
+            primary_reason = (
+                report.factor_1_why_it_moved[0].category if report.factor_1_why_it_moved else "Unclassified"
             )
-
-        primary_reason = report.factor_1_why_it_moved[0].category if report.factor_1_why_it_moved else "Unclassified"
-        total = await self._memory.retain(
-            live.snapshot.asset,
-            report.model_dump_json(),
-            live.snapshot.change_pct,
-            primary_reason,
-            research_id=report.research_id,
-            metadata={
-                "information_cutoff": report.information_cutoff.isoformat()
-                if report.information_cutoff
-                else report.generated_at,
-            },
-        )
-        report.memory_used.total_count = total
-
-        if total > 0 and total % 5 == 0:
-            insight = await self._memory.reflect(
+            total = await self._memory.retain(
                 live.snapshot.asset,
-                "What patterns emerge from this ticker's historical moves?",
+                self._memory_text(report),
+                live.snapshot.change_pct,
+                primary_reason,
+                research_id=report.research_id,
+                metadata={
+                    "information_cutoff": report.information_cutoff.isoformat()
+                    if report.information_cutoff
+                    else report.generated_at,
+                },
             )
-            await self._memory.retain_insight(live.snapshot.asset, insight, total)
-            report.historical_precedent.meta_insight = insight
+            report.memory_used.total_count = total
+
+            if total > 0 and total % 5 == 0:
+                insight = await self._memory.reflect(
+                    live.snapshot.asset,
+                    "What patterns emerge from this ticker's historical moves?",
+                )
+                await self._memory.retain_insight(live.snapshot.asset, insight, total)
+                report.historical_precedent.meta_insight = insight
 
         return ResearchResult(report=report, audit=audit)
+
+    @staticmethod
+    def _memory_text(report: Report) -> str:
+        driver = report.factor_1_why_it_moved[0] if report.factor_1_why_it_moved else None
+        reason = driver.category.replace(" ", "_") if driver else "unclassified"
+        forward = report.historical_precedent.average_follow_through
+        forward_text = f"{forward:.4f}" if forward is not None else "unavailable"
+        summary = (
+            f"{report.asset} moved {report.snapshot.change_pct:.2f}% on {report.generated_at[:10]}. "
+            f"Primary observed driver: {driver.explanation if driver else 'not established'}. "
+            f"Evidence coverage was {report.confidence_meter.coverage:.0%}. "
+            "This is a retained QuantMind research observation, not financial advice."
+        )
+        return (
+            f"{summary}\n"
+            f"[EVENT] date={report.generated_at[:10]} change_pct={report.snapshot.change_pct:.4f} "
+            f"reason={reason} forward_5d={forward_text}"
+        )
 
     @staticmethod
     def _deterministic_report(
@@ -221,7 +238,11 @@ class QuantMindEngine:
                 regime="Institutional",
                 groups=vector_groups,
                 explanation=audit.explanation,
-                audit=[f"{parameter.name}: {parameter.contribution:.1f}" for parameter in audit.parameters if parameter.available],
+                audit=[
+                    f"{parameter.name}: {parameter.contribution:.1f}"
+                    for parameter in audit.parameters
+                    if parameter.available
+                ],
             ),
             historical_precedent=precedent,
             factor_5_facts_vs_reality=FactsVsReality(
@@ -236,6 +257,7 @@ class QuantMindEngine:
                 recalled_count=precedent.count if memory_enabled else 0,
                 total_count=recalled.total_count,
                 patterns=recalled.texts,
+                backend="hindsight-cloud" if memory_enabled else "unavailable",
             ),
             live_news=live.news,
         )

@@ -16,8 +16,13 @@ logger = logging.getLogger(__name__)
 
 class GroqResearcher:
     def __init__(self) -> None:
-        self._client = AsyncGroq(api_key=os.environ["GROQ_API_KEY"])
+        api_key = os.getenv("GROQ_API_KEY", "").strip()
+        self._client = AsyncGroq(api_key=api_key) if api_key else None
         self._model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+
+    @property
+    def configured(self) -> bool:
+        return self._client is not None
 
     async def synthesize(
         self,
@@ -26,6 +31,8 @@ class GroqResearcher:
         recalled_memory: str,
         deterministic_report: Report,
     ) -> Report:
+        if self._client is None:
+            raise RuntimeError("Groq is not configured; deterministic analysis is available.")
         system = (
             "You are QuantMind, a cautious institutional research analyst. Return only valid JSON "
             "matching the supplied Pydantic report schema. Use only live data and recalled memory. "

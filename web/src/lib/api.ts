@@ -67,6 +67,14 @@ export type MarketResponse = {
   points: MarketPoint[];
 };
 
+export type HealthResponse = {
+  status: string;
+  database: string;
+  memory: string;
+  llm: string;
+  universe_size: number;
+};
+
 export async function searchAssets(query: string, signal: AbortSignal): Promise<SearchResponse> {
   const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`, { signal });
   if (!response.ok) throw new Error(`Search failed (${response.status})`);
@@ -89,4 +97,10 @@ export async function fetchMarket(ticker: string, signal: AbortSignal): Promise<
   const response = await fetch(`/api/market/${encodeURIComponent(ticker)}?limit=500`, { signal });
   if (!response.ok) throw new Error(`Market series unavailable (${response.status})`);
   return response.json() as Promise<MarketResponse>;
+}
+
+export async function fetchHealth(signal: AbortSignal): Promise<HealthResponse> {
+  const response = await fetch("/api/health", { signal });
+  if (!response.ok) throw new Error(`Dependency health unavailable (${response.status})`);
+  return response.json() as Promise<HealthResponse>;
 }
