@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from .app import enforce_rate_limit
-from .forecast import baseline_forecast
+from .forecast import analogue_forecast
 from .ledger import Hypothesis, HypothesisView, create_hypothesis, view
 from .ledger_store import LedgerStore
 
@@ -58,7 +58,12 @@ async def commit_ledger(request: Request, body: CommitRequest) -> Hypothesis:
     enforce_rate_limit(request)
     store = _store()
     try:
-        draft = baseline_forecast(body.ticker, store=store, horizon_days=body.horizon_days)
+        cutoff = (
+            datetime.fromisoformat(body.as_of).replace(tzinfo=UTC)
+            if body.as_of
+            else datetime.now(UTC)
+        )
+        draft = analogue_forecast(body.ticker, body.horizon_days, cutoff)
         if not draft.available or draft.probability is None:
             raise HTTPException(status_code=422, detail=draft.reason or "Not enough history to forecast responsibly.")
         return create_hypothesis(
@@ -68,6 +73,11 @@ async def commit_ledger(request: Request, body: CommitRequest) -> Hypothesis:
             base_rate=draft.base_rate, sample_size=draft.sample_size,
             as_of=datetime.fromisoformat(body.as_of).date() if body.as_of else None,
             forecast_algo_version=draft.forecast_algo_version,
+            relaxation_level=draft.relaxation_level,
+            base_rate_scope=draft.base_rate_scope,
+            analogue_count=draft.analogue_count,
+            memory_ids_used=draft.memory_ids_used,
+            hash_version=2,
         )
     finally:
         store.close()

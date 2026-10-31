@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from quantmind.forecast import baseline_forecast
+from quantmind.event_store import EventStore, MarketEvent, deterministic_event_id
 from quantmind.ledger import HypothesisOverrides, create_hypothesis, supersede, verify_record, view
 from quantmind.ledger_store import LedgerStore
 from quantmind.resolver import resolve_hypothesis
@@ -140,6 +141,26 @@ def test_resolver_uses_adjusted_close_and_abnormal_return(tmp_path: Path) -> Non
 def test_ledger_api_commit_list_detail_and_stats(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     database = tmp_path / "quantmind.db"
     seed_market(database)
+    event_store = EventStore(database)
+    event_dates = [datetime(2024, 1, 10, tzinfo=UTC).date() + timedelta(days=index) for index in range(5)]
+    event_dates.append(datetime(2024, 3, 20, tzinfo=UTC).date())
+    for index, event_date in enumerate(event_dates):
+        source_url = f"https://example.test/event-{index}"
+        event_store.upsert(
+            MarketEvent(
+                event_id=deterministic_event_id("TEST", event_date, "price_move", source_url),
+                ticker="TEST",
+                event_date=event_date,
+                available_at=datetime.combine(event_date, datetime.min.time(), tzinfo=UTC),
+                event_type="price_move",
+                headline="Fixture event",
+                source_url=source_url,
+                source_kind="fixture",
+                fwd_20d=0.05 if index % 2 else -0.02,
+                fwd_20d_end=event_date + timedelta(days=20),
+            )
+        )
+    event_store.close()
     monkeypatch.setenv("QUANTMIND_DATABASE", str(database))
     from quantmind.app import app
 

@@ -14,6 +14,7 @@ from typing import Any
 import yfinance as yf
 from quantmind.curated_events import CuratedEvent, load_curated_events
 from quantmind.event_memory import QuantMindEventMemory
+from quantmind.event_store import EventStore, MarketEvent, deterministic_event_id
 from quantmind.events import DailyMarketRow, EventRecord, classify_price_event, compute_forward_return
 from quantmind.sec_events import FilingEvent, fetch_8k_events
 
@@ -74,6 +75,7 @@ def load_rows(ticker: str, years: int, spy_history: Any) -> list[DailyMarketRow]
 
 def _record_from_row(
     ticker: str,
+    rows: list[DailyMarketRow],
     row: DailyMarketRow,
     row_index: int,
     closes: list[float],
@@ -83,6 +85,10 @@ def _record_from_row(
     sector: str | None = None,
     source: str = "Yahoo Finance historical prices",
 ) -> EventRecord:
+    def end_date(horizon: int) -> date | None:
+        target = row_index + horizon
+        return rows[target].event_date if target < len(rows) else None
+
     return EventRecord(
         ticker=ticker,
         sector=sector,
@@ -99,6 +105,37 @@ def _record_from_row(
         forward_return_5d=compute_forward_return(closes, row_index, 5),
         forward_return_20d=compute_forward_return(closes, row_index, 20),
         forward_return_60d=compute_forward_return(closes, row_index, 60),
+        forward_return_1d_end=end_date(1),
+        forward_return_5d_end=end_date(5),
+        forward_return_20d_end=end_date(20),
+        forward_return_60d_end=end_date(60),
+    )
+
+
+def market_event(record: EventRecord) -> MarketEvent:
+    source_url = record.filing_url or f"https://finance.yahoo.com/quote/{record.ticker}/history/"
+    available_at = datetime.combine(record.event_date, datetime.min.time(), tzinfo=UTC)
+    return MarketEvent(
+        event_id=deterministic_event_id(record.ticker, record.event_date, record.event_type, source_url),
+        ticker=record.ticker,
+        sector=record.sector,
+        event_date=record.event_date,
+        available_at=available_at,
+        event_type=record.event_type,
+        headline=record.headline or f"{record.ticker} {record.event_type}",
+        source_url=source_url,
+        source_kind=record.source,
+        day0_return=record.return_1d,
+        day0_abnormal_return=record.abnormal_return_1d,
+        volume_ratio=record.volume_ratio,
+        fwd_1d=record.forward_return_1d,
+        fwd_5d=record.forward_return_5d,
+        fwd_20d=record.forward_return_20d,
+        fwd_60d=record.forward_return_60d,
+        fwd_1d_end=record.forward_return_1d_end,
+        fwd_5d_end=record.forward_return_5d_end,
+        fwd_20d_end=record.forward_return_20d_end,
+        fwd_60d_end=record.forward_return_60d_end,
     )
 
 
@@ -122,6 +159,7 @@ def event_records(
         source_records.append(
             _record_from_row(
                 ticker,
+                rows,
                 row,
                 index,
                 closes,
@@ -143,7 +181,7 @@ def event_records(
             continue
         source_records.append(
             _record_from_row(
-                ticker, row, index, closes, filing.event_type, filing.headline, filing.filing_url, sector
+                ticker, rows, row, index, closes, filing.event_type, filing.headline, filing.filing_url, sector
             )
         )
         explained_dates.add(filing.event_date)
@@ -157,7 +195,7 @@ def event_records(
             continue
         event_type = classify_price_event(row)
         if event_type:
-            price_records.append(_record_from_row(ticker, row, index, closes, event_type, sector=sector))
+            price_records.append(_record_from_row(ticker, rows, row, index, closes, event_type, sector=sector))
     return list(deduplicated_sources.values()) + price_records[-max_events:]
 
 
@@ -200,7 +238,7 @@ def earnings_records(
             event_type = "earnings_beat" if surprise > 0 else "earnings_miss"
         index, row = match
         records.append(_record_from_row(
-            ticker, row, index, closes, event_type,
+            ticker, rows, row, index, closes, event_type,
             filing.headline if filing else f"{ticker} earnings on {event_date.isoformat()}",
             filing.filing_url if filing else None,
             sector,
@@ -224,10 +262,12 @@ def write_checkpoint(path: Path, completed: set[str]) -> None:
 
 
 def memory_item(record: EventRecord) -> dict[str, Any]:
+    source_url = record.filing_url or f"https://finance.yahoo.com/quote/{record.ticker}/history/"
+    document_id = deterministic_event_id(record.ticker, record.event_date, record.event_type, source_url)
     return {
         "content": record.to_memory_text(),
         "timestamp": datetime.combine(record.event_date, datetime.min.time(), tzinfo=UTC),
-        "document_id": f"event-{record.ticker}-{record.event_date.isoformat()}-{record.event_type}",
+        "document_id": document_id,
         "context": "QuantMind source-backed historical market event.",
         "metadata": {
             "ticker": record.ticker,
@@ -237,7 +277,13 @@ def memory_item(record: EventRecord) -> dict[str, Any]:
             "source": record.source,
             "source_url": record.filing_url,
         },
-        "tags": ["historical-event", record.event_type, f"ticker:{record.ticker}", f"sector:{record.sector or 'unknown'}"],
+        "tags": [
+            "historical-event",
+            f"ticker:{record.ticker}",
+            f"sector:{record.sector or 'unknown'}",
+            f"event_type:{record.event_type}",
+            f"provenance:{record.source}",
+        ],
         "update_mode": "replace",
     }
 
@@ -253,6 +299,8 @@ def print_events(records: list[EventRecord]) -> None:
 
 
 async def run(args: argparse.Namespace) -> None:
+    if not args.dry_run and not args.write:
+        raise ValueError("Live backfill requires explicit --write; use --dry-run to inspect results.")
     tickers = [ticker.upper() for ticker in args.tickers]
     completed = read_checkpoint(args.checkpoint)
     spy_history = yf.Ticker("SPY").history(start=date.today() - timedelta(days=args.years * 366), end=date.today() + timedelta(days=1), auto_adjust=False)
@@ -260,6 +308,7 @@ async def run(args: argparse.Namespace) -> None:
     pending_tickers: set[str] = set()
     total_counts: Counter[str] = Counter()
     total_record_length = 0
+    event_store = EventStore(Path("data/quantmind.db")) if args.write else None
     for ticker in tickers:
         if ticker in completed:
             print(f"{ticker}: skipped (checkpoint)")
@@ -276,19 +325,24 @@ async def run(args: argparse.Namespace) -> None:
         total_counts.update(counts)
         total_record_length += sum(len(record.to_memory_text()) for record in records)
         print(f"{ticker}: {len(rows)} trading rows, {len(records)} events, by type={dict(sorted(counts.items()))}")
-        if not args.dry_run:
+        if args.write:
+            if event_store is not None:
+                for record in records:
+                    event_store.upsert(market_event(record))
             pending_items.extend(memory_item(record) for record in records)
             pending_tickers.add(ticker)
     print(f"TOTAL: {sum(total_counts.values())} memories, by type={dict(sorted(total_counts.items()))}")
     average_length = total_record_length / sum(total_counts.values()) if total_counts else 0.0
     print(f"Average record length: {average_length:.0f} characters.")
     print("Hindsight credit cost: unverified; measure from account usage before and after a live run.")
-    if not args.dry_run and pending_items:
+    if args.write and pending_items:
         operation_id = f"backfill-{','.join(tickers)}-{args.years}-{args.max_events_per_ticker}"
         count = await QuantMindEventMemory().retain_batch(pending_items, operation_id=operation_id)
         completed.update(pending_tickers)
         write_checkpoint(args.checkpoint, completed)
         print(f"Retained {count} memories in quantmind-events.")
+    if event_store is not None:
+        event_store.close()
     if args.dry_run:
         print("DRY RUN: no Hindsight calls made.")
 
@@ -301,6 +355,7 @@ def main() -> None:
     parser.add_argument("--list-events", metavar="TICKER")
     parser.add_argument("--type", dest="event_type")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--write", action="store_true")
     parser.add_argument("--checkpoint", type=checkpoint_path, default=Path(".cache/quantmind-backfill.json"))
     args = parser.parse_args()
     if args.list_events:

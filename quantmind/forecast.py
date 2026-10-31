@@ -7,8 +7,10 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from .analogue_retrieval import AnalogueService
+from .current_event import detect_current_event
 from .ledger_store import LedgerStore
 
 
@@ -22,6 +24,10 @@ class ForecastDraft(BaseModel):
     event_type: str = "price_only"
     forecast_algo_version: str = "baseline-v0"
     reason: str | None = None
+    relaxation_level: str | None = None
+    base_rate_scope: str | None = None
+    analogue_count: int = 0
+    memory_ids_used: list[str] = Field(default_factory=list)
 
 
 def baseline_forecast(
@@ -67,3 +73,49 @@ def baseline_forecast(
     finally:
         if owned:
             ledger_store.close()
+
+
+def analogue_forecast(
+    ticker: str,
+    horizon_days: Literal[5, 20, 60],
+    cutoff: datetime | None = None,
+) -> ForecastDraft:
+    effective_cutoff = cutoff or datetime.now(UTC)
+    query = detect_current_event(ticker, effective_cutoff)
+    if query is None:
+        return ForecastDraft(
+            ticker=ticker.upper(),
+            available=False,
+            forecast_algo_version="analogue-v1",
+            reason="No qualifying event was detected before the information cutoff.",
+        )
+    study = AnalogueService(Path(os.getenv("QUANTMIND_DATABASE", "data/quantmind.db"))).study(
+        query,
+        cutoff=effective_cutoff,
+    )
+    statistic = study.statistics[f"fwd_{horizon_days}d"]
+    if statistic.insufficient_analogues or statistic.forecast_probability is None:
+        return ForecastDraft(
+            ticker=ticker.upper(),
+            available=False,
+            event_type=query.event_type,
+            forecast_algo_version="analogue-v1",
+            relaxation_level=study.relaxation_level,
+            base_rate_scope=statistic.base_rate_scope,
+            analogue_count=statistic.n,
+            memory_ids_used=[match.event.event_id for match in study.matches],
+            reason=f"Only {statistic.n} elapsed analogue outcomes are available; at least 5 are required.",
+        )
+    return ForecastDraft(
+        ticker=ticker.upper(),
+        available=True,
+        probability=statistic.forecast_probability,
+        base_rate=statistic.base_rate,
+        sample_size=statistic.n,
+        event_type=query.event_type,
+        forecast_algo_version="analogue-v1",
+        relaxation_level=study.relaxation_level,
+        base_rate_scope=statistic.base_rate_scope,
+        analogue_count=statistic.n,
+        memory_ids_used=[match.event.event_id for match in study.matches],
+    )

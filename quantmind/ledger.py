@@ -46,6 +46,10 @@ class Hypothesis(BaseModel):
     status_reason: str | None = None
     resolve_after: date
     record_hash: str
+    relaxation_level: str | None = None
+    base_rate_scope: str | None = None
+    analogue_count: int | None = None
+    hash_version: int = 1
 
 
 class Resolution(BaseModel):
@@ -98,6 +102,9 @@ def _canonical_fields(hypothesis: Hypothesis) -> dict[str, object]:
     values.pop("status", None)
     values.pop("status_reason", None)
     values.pop("record_hash", None)
+    if hypothesis.hash_version == 1:
+        for field in ("relaxation_level", "base_rate_scope", "analogue_count", "hash_version"):
+            values.pop(field, None)
     return values
 
 
@@ -174,6 +181,10 @@ def create_hypothesis(
     memory_ids_used: list[str] | None = None,
     supersedes_id: UUID | None = None,
     forecast_algo_version: str = "baseline-v0",
+    relaxation_level: str | None = None,
+    base_rate_scope: str | None = None,
+    analogue_count: int | None = None,
+    hash_version: int = 1,
 ) -> Hypothesis:
     cutoff = information_cutoff.astimezone(UTC)
     resolve_after = _resolve_after(store, ticker, cutoff, horizon_days)
@@ -191,6 +202,8 @@ def create_hypothesis(
         forecast_algo_version=forecast_algo_version, code_version=_code_version(),
         evidence_ids=evidence_ids or [], memory_ids_used=memory_ids_used or [], supersedes_id=supersedes_id,
         status_reason=resolve_after.reason, resolve_after=resolve_after.date, record_hash="pending",
+        relaxation_level=relaxation_level, base_rate_scope=base_rate_scope,
+        analogue_count=analogue_count, hash_version=hash_version,
     )
     hypothesis.record_hash = compute_record_hash(hypothesis)
     values = HypothesisWrite(
@@ -219,6 +232,10 @@ def create_hypothesis(
         status_reason=hypothesis.status_reason,
         resolve_after=hypothesis.resolve_after.isoformat(),
         record_hash=hypothesis.record_hash,
+        relaxation_level=hypothesis.relaxation_level,
+        base_rate_scope=hypothesis.base_rate_scope,
+        analogue_count=hypothesis.analogue_count,
+        hash_version=hypothesis.hash_version,
     )
     return _row_to_hypothesis(store.insert_hypothesis(values))
 

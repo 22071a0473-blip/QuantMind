@@ -27,6 +27,10 @@ class EventRecord(BaseModel):
     forward_return_5d: float | None = None
     forward_return_20d: float | None = None
     forward_return_60d: float | None = None
+    forward_return_1d_end: date | None = None
+    forward_return_5d_end: date | None = None
+    forward_return_20d_end: date | None = None
+    forward_return_60d_end: date | None = None
     source: str = "Yahoo Finance historical prices"
 
     def to_memory_text(self) -> str:
@@ -88,6 +92,10 @@ class EventRecord(BaseModel):
             forward_return_5d=parse_percent("fwd_5d"),
             forward_return_20d=parse_percent("fwd_20d"),
             forward_return_60d=parse_percent("fwd_60d"),
+            forward_return_1d_end=date.fromisoformat(fields["fwd_1d_end"]) if fields.get("fwd_1d_end") not in {None, "null"} else None,
+            forward_return_5d_end=date.fromisoformat(fields["fwd_5d_end"]) if fields.get("fwd_5d_end") not in {None, "null"} else None,
+            forward_return_20d_end=date.fromisoformat(fields["fwd_20d_end"]) if fields.get("fwd_20d_end") not in {None, "null"} else None,
+            forward_return_60d_end=date.fromisoformat(fields["fwd_60d_end"]) if fields.get("fwd_60d_end") not in {None, "null"} else None,
             source=fields.get("source", "Yahoo Finance historical prices"),
         )
 

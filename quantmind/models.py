@@ -137,6 +137,46 @@ class HistoricalPrecedent(BaseModel):
     meta_insight: str | None = None
 
 
+class AnalogueFeatureMatch(BaseModel):
+    name: str
+    score: float = Field(ge=0, le=1)
+
+
+class AnalogueRow(BaseModel):
+    event_id: str
+    ticker: str
+    event_date: str
+    event_type: str
+    headline: str
+    source_url: str
+    similarity: float = Field(ge=0, le=1)
+    feature_scores: list[AnalogueFeatureMatch] = Field(default_factory=list)
+    retrieval_source: str
+    relaxation_level: str
+    forward_returns: dict[str, float | None] = Field(default_factory=dict)
+
+
+class AnalogueDistribution(BaseModel):
+    n: int = Field(ge=0)
+    insufficient_analogues: bool
+    median: float | None = None
+    mean: float | None = None
+    iqr: float | None = None
+    hit_rate: float | None = None
+    interval_90: list[float] | None = None
+    forecast_probability: float | None = None
+    base_rate_scope: str | None = None
+
+
+class AnaloguePrecedent(BaseModel):
+    detected_event: AnalogueRow | None = None
+    matches: list[AnalogueRow] = Field(default_factory=list)
+    distributions: dict[str, AnalogueDistribution] = Field(default_factory=dict)
+    relaxation_level: str | None = None
+    semantic_status: str = "not_requested"
+    insufficient_analogues: bool = False
+
+
 class FactsVsReality(BaseModel):
     reported_facts: str
     market_narrative: str

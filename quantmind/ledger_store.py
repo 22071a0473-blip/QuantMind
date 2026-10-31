@@ -41,6 +41,10 @@ class HypothesisWrite:
     status_reason: str | None
     resolve_after: str
     record_hash: str
+    relaxation_level: str | None = None
+    base_rate_scope: str | None = None
+    analogue_count: int | None = None
+    hash_version: int = 1
 
 
 @dataclass(frozen=True)
@@ -110,7 +114,11 @@ class LedgerStore:
                     CHECK(status IN ('open', 'resolved', 'censored', 'invalidated')),
                 status_reason TEXT,
                 resolve_after TEXT NOT NULL,
-                record_hash TEXT NOT NULL
+                record_hash TEXT NOT NULL,
+                relaxation_level TEXT,
+                base_rate_scope TEXT,
+                analogue_count INTEGER,
+                hash_version INTEGER NOT NULL DEFAULT 1
             );
             CREATE TABLE IF NOT EXISTS resolutions (
                 hypothesis_id TEXT PRIMARY KEY REFERENCES hypotheses(id),
@@ -147,7 +155,11 @@ class LedgerStore:
                  OLD.code_version != NEW.code_version OR OLD.evidence_ids != NEW.evidence_ids OR
                  OLD.memory_ids_used != NEW.memory_ids_used OR
                  OLD.supersedes_id IS NOT NEW.supersedes_id OR OLD.resolve_after != NEW.resolve_after OR
-                 OLD.record_hash != NEW.record_hash
+                 OLD.record_hash != NEW.record_hash OR
+                 OLD.relaxation_level IS NOT NEW.relaxation_level OR
+                 OLD.base_rate_scope IS NOT NEW.base_rate_scope OR
+                 OLD.analogue_count IS NOT NEW.analogue_count OR
+                 OLD.hash_version != NEW.hash_version
             BEGIN SELECT RAISE(ABORT, 'hypotheses are append-only'); END;
             CREATE TRIGGER IF NOT EXISTS hypotheses_no_delete
             BEFORE DELETE ON hypotheses
@@ -160,6 +172,17 @@ class LedgerStore:
             BEGIN SELECT RAISE(ABORT, 'resolutions are immutable'); END;
             """
         )
+        columns = {
+            row["name"] for row in self.connection.execute("PRAGMA table_info(hypotheses)").fetchall()
+        }
+        for column, definition in (
+            ("relaxation_level", "TEXT"),
+            ("base_rate_scope", "TEXT"),
+            ("analogue_count", "INTEGER"),
+            ("hash_version", "INTEGER NOT NULL DEFAULT 1"),
+        ):
+            if column not in columns:
+                self.connection.execute(f"ALTER TABLE hypotheses ADD COLUMN {column} {definition}")
         self.connection.commit()
 
     @contextmanager
@@ -183,8 +206,9 @@ class LedgerStore:
                     provenance, event_type, claim_text, direction, horizon_days,
                     predicted_probability, benchmark, threshold, base_rate, sample_size,
                     forecast_algo_version, code_version, evidence_ids, memory_ids_used,
-                    supersedes_id, status, status_reason, resolve_after, record_hash
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    supersedes_id, status, status_reason, resolve_after, record_hash,
+                    relaxation_level, base_rate_scope, analogue_count, hash_version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     values.id, values.ticker, values.security_id, values.created_at,
@@ -195,6 +219,8 @@ class LedgerStore:
                     values.forecast_algo_version, values.code_version, values.evidence_ids,
                     values.memory_ids_used, values.supersedes_id, values.status,
                     values.status_reason, values.resolve_after, values.record_hash,
+                    values.relaxation_level, values.base_rate_scope, values.analogue_count,
+                    values.hash_version,
                 ),
             )
             self.connection.commit()

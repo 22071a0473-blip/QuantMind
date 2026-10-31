@@ -6,7 +6,7 @@ import re
 import threading
 import time
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from html import escape
 from pathlib import Path
 from typing import Literal
@@ -20,9 +20,13 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.staticfiles import StaticFiles
 
 from .agent_graph import AgentGraph, AgentState
+from .analogue_retrieval import AnalogueService
+from .analogues import AnalogueMatch, EventQuery
 from .confidence_engine import ConfidenceAudit, ConfidenceEngine
+from .current_event import detect_current_event
 from .engine import QuantMindEngine
 from .event_memory import QuantMindEventMemory
+from .event_store import MarketEvent
 from .llm import GroqResearcher
 from .memory import HindsightMemory
 from .search import ParsedQuery, SearchExecution, SearchResult, fts_query, parse_query
@@ -361,6 +365,66 @@ async def market_series(
         }
     finally:
         store.close()
+
+
+@app.get("/api/precedent/{ticker}")
+async def precedent(
+    ticker: str,
+    cutoff: datetime | None = Query(default=None),
+) -> dict[str, object]:
+    """Return a point-in-time structured analogue study."""
+    normalized = validate_ticker(ticker)
+    effective_cutoff = cutoff.astimezone(UTC) if cutoff else datetime.now(UTC)
+    if effective_cutoff > datetime.now(UTC):
+        raise HTTPException(status_code=422, detail="cutoff cannot be in the future")
+    detected = detect_current_event(normalized, effective_cutoff)
+    if detected is None:
+        return {"ticker": normalized, "detected_event": None, "status": "no_event", "cutoff": effective_cutoff.isoformat()}
+    service = AnalogueService(Path(os.environ.get("QUANTMIND_DATABASE", "data/quantmind.db")))
+    study = await service.astudy(detected, cutoff=effective_cutoff)
+    return {
+        "ticker": normalized,
+        "cutoff": effective_cutoff.isoformat(),
+        "status": "insufficient_analogues" if study.insufficient_analogues else "ok",
+        "detected_event": _analogue_row_payload(detected, None),
+        "matches": [_analogue_row_payload(match.event, match) for match in study.matches],
+        "distributions": {
+            horizon: distribution.model_dump(mode="json")
+            for horizon, distribution in study.statistics.items()
+        },
+        "relaxation_level": study.relaxation_level,
+        "semantic_status": study.semantic_status,
+    }
+
+
+def _analogue_row_payload(
+    event: MarketEvent | EventQuery,
+    match: AnalogueMatch | None,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "event_id": event.event_id or "",
+        "ticker": event.ticker,
+        "event_date": event.event_date.isoformat(),
+        "event_type": event.event_type,
+        "headline": getattr(event, "headline", f"{event.ticker} {event.event_type}"),
+        "source_url": getattr(event, "source_url", None),
+        "forward_returns": {
+            "fwd_1d": getattr(event, "fwd_1d", None),
+            "fwd_5d": getattr(event, "fwd_5d", None),
+            "fwd_20d": getattr(event, "fwd_20d", None),
+            "fwd_60d": getattr(event, "fwd_60d", None),
+        },
+    }
+    if match is not None:
+        payload.update(
+            {
+                "similarity": match.similarity,
+                "feature_scores": match.feature_scores.model_dump(exclude_none=True),
+                "retrieval_source": match.retrieval_source,
+                "relaxation_level": match.relaxation_level,
+            }
+        )
+    return payload
 
 
 @app.get("/api/report/{ticker}")
