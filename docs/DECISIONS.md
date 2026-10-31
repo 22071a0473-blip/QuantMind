@@ -55,3 +55,14 @@
   compared against this baseline.
 - **Reversal criteria:** Replace only after a walk-forward comparison shows a
   reliable out-of-sample improvement without leakage.
+
+## ADR-005: Refuse ledger forecasts below thirty observations
+
+- **Context:** A probability based on a tiny sample can look precise while
+  having no defensible empirical support.
+- **Decision:** `baseline-v0` returns an unavailable draft when fewer than 30
+  complete ticker-versus-SPY observations exist for the requested horizon.
+- **Trade-offs:** New or thinly traded securities cannot be committed to the
+  ledger until enough history is available.
+- **Operational consequence:** The UI explains why a forecast cannot be
+  committed instead of writing a weak or fabricated probability.

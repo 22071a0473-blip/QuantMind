@@ -16,3 +16,18 @@ Status: passed locally on 2026-03-10.
 - Superseded planning documents are retained under `docs/archive/`.
 
 The Hindsight service itself was not configured in this environment, so cloud reachability is reported as `not_configured` rather than claimed as verified.
+
+## Gate 1 — hypothesis ledger
+
+Status: implementation and offline verification in progress.
+
+- Append-only hypotheses use SQLite immutability triggers and deterministic
+  record hashes.
+- Duplicate forecast commits return the existing row; superseding creates a
+  new linked row.
+- Baseline probabilities are deterministic and require at least 30 complete
+  ticker/SPY observations.
+- Resolution uses the first bar strictly after the information cutoff and
+  records abnormal return, Brier score, and log-loss.
+- The frontend exposes the ledger as a security-monitor tab with explicit
+  commit, loading, error, and unavailable-data states.

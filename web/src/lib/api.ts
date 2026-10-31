@@ -75,6 +75,32 @@ export type HealthResponse = {
   universe_size: number;
 };
 
+export type Hypothesis = {
+  id: string;
+  ticker: string;
+  created_at: string;
+  information_cutoff: string;
+  provenance: "live_forward" | "historical_replay";
+  claim_text: string;
+  direction: "outperform" | "underperform";
+  horizon_days: 5 | 20 | 60;
+  predicted_probability: number;
+  status: "open" | "resolved" | "censored" | "invalidated";
+  status_reason?: string | null;
+  resolve_after: string;
+};
+
+export type LedgerItem = {
+  hypothesis: Hypothesis;
+  resolution: {
+    realized_abnormal_return: number;
+    outcome: number;
+    brier: number;
+    log_loss: number;
+  } | null;
+  verified: boolean;
+};
+
 export async function searchAssets(query: string, signal: AbortSignal): Promise<SearchResponse> {
   const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`, { signal });
   if (!response.ok) throw new Error(`Search failed (${response.status})`);
@@ -103,4 +129,34 @@ export async function fetchHealth(signal: AbortSignal): Promise<HealthResponse> 
   const response = await fetch("/api/health", { signal });
   if (!response.ok) throw new Error(`Dependency health unavailable (${response.status})`);
   return response.json() as Promise<HealthResponse>;
+}
+
+export async function fetchLedger(ticker: string, signal: AbortSignal): Promise<LedgerItem[]> {
+  const response = await fetch(`/api/ledger?ticker=${encodeURIComponent(ticker)}&limit=50`, { signal });
+  if (!response.ok) throw new Error(`Ledger unavailable (${response.status})`);
+  const payload = await response.json() as { items: Hypothesis[]; total: number; limit: number; next_cursor?: string | null };
+  const items = await Promise.all(payload.items.map(async (hypothesis) => {
+    const detail = await fetch(`/api/ledger/${hypothesis.id}`, { signal });
+    if (!detail.ok) throw new Error(`Ledger detail unavailable (${detail.status})`);
+    return detail.json() as Promise<LedgerItem>;
+  }));
+  return items;
+}
+
+export async function commitForecast(
+  ticker: string,
+  horizonDays: 5 | 20 | 60,
+  signal: AbortSignal,
+): Promise<Hypothesis> {
+  const response = await fetch("/api/ledger/commit", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ticker, horizon_days: horizonDays }),
+    signal,
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { detail?: string } | null;
+    throw new Error(payload?.detail ?? `Forecast commit failed (${response.status})`);
+  }
+  return response.json() as Promise<Hypothesis>;
 }

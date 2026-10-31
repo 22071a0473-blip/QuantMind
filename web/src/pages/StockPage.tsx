@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { fetchHealth, fetchMarket, fetchReport, type HealthResponse, type MarketPoint, type MarketResponse, type Report } from "../lib/api";
+import { commitForecast, fetchHealth, fetchLedger, fetchMarket, fetchReport, type HealthResponse, type Hypothesis, type LedgerItem, type MarketPoint, type MarketResponse, type Report } from "../lib/api";
 
 function formatNumber(value: number | null | undefined, digits = 2): string {
   return value == null || !Number.isFinite(value) ? "—" : value.toLocaleString(undefined, { maximumFractionDigits: digits });
@@ -36,6 +36,47 @@ function Metric({ label, value, tone = "" }: { label: string; value: string; ton
   return <div className="metric"><span>{label}</span><strong className={tone}>{value}</strong></div>;
 }
 
+function LedgerPanel({ ticker }: { ticker: string }) {
+  const [items, setItems] = useState<LedgerItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [committing, setCommitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = (signal: AbortSignal) => {
+    setLoading(true);
+    fetchLedger(ticker, signal)
+      .then(setItems)
+      .catch((reason: unknown) => { if (!signal.aborted) setError(reason instanceof Error ? reason.message : "Ledger unavailable"); })
+      .finally(() => { if (!signal.aborted) setLoading(false); });
+  };
+
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [ticker]);
+
+  const commit = () => {
+    const controller = new AbortController();
+    setCommitting(true);
+    setError(null);
+    commitForecast(ticker, 20, controller.signal)
+      .then((hypothesis: Hypothesis) => setItems((current) => [
+        { hypothesis, resolution: null, verified: true }, ...current.filter((item) => item.hypothesis.id !== hypothesis.id),
+      ]))
+      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Forecast commit failed"))
+      .finally(() => setCommitting(false));
+  };
+
+  if (loading) return <article className="panel"><div className="panel-head"><span>HYPOTHESIS LEDGER</span></div><p>Loading dated forecasts…</p></article>;
+  return <article className="panel ledger-panel">
+    <div className="panel-head"><span>HYPOTHESIS LEDGER</span><button className="button-primary" onClick={commit} disabled={committing}>{committing ? "COMMITTING…" : "COMMIT FORECAST"}</button></div>
+    {error && <p className="warning-bar">{error}</p>}
+    {!items.length && !error && <div className="empty-state">The ledger stores falsifiable, dated forecasts. Commit the first forecast when enough history is available.</div>}
+    {items.length > 0 && <div className="ledger-table"><div className="ledger-row ledger-head"><span>CREATED</span><span>CLAIM</span><span>HORIZON</span><span>PROBABILITY</span><span>STATUS</span><span>PROVENANCE</span></div>{items.map((item) => <div className="ledger-row" key={item.hypothesis.id}><span>{item.hypothesis.created_at.slice(0, 10)}</span><span>{item.hypothesis.claim_text}</span><span>{item.hypothesis.horizon_days}D</span><span>{Math.round(item.hypothesis.predicted_probability * 100)}%</span><span>{item.hypothesis.status}{item.resolution ? ` · ${item.resolution.realized_abnormal_return >= 0 ? "+" : ""}${(item.resolution.realized_abnormal_return * 100).toFixed(2)}%` : ""}</span><span>{item.hypothesis.provenance} {item.verified ? "✓" : "!"}</span></div>)}</div>}
+  </article>;
+}
+
 export function StockPage() {
   const { symbol = "PLTR" } = useParams();
   const ticker = symbol.toUpperCase();
@@ -43,7 +84,7 @@ export function StockPage() {
   const [market, setMarket] = useState<MarketResponse | null>(null);
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"overview" | "evidence" | "memory">("overview");
+  const [tab, setTab] = useState<"overview" | "evidence" | "memory" | "ledger">("overview");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -66,7 +107,7 @@ export function StockPage() {
         <div><p className="eyebrow">SECURITY MONITOR</p><h1>{ticker}</h1><p className="company-name">{profile?.legal_name ?? report.factor_2_deep_research.company} · {profile?.exchange ?? "MARKET DATA"}</p></div>
         <div className="quote"><strong>{latest ? formatNumber(latest.adjusted_close ?? latest.close) : formatNumber(report.snapshot.price)}</strong><span className={report.snapshot.change_pct >= 0 ? "positive" : "negative"}>{formatPercent(report.snapshot.change_pct)}</span><small>{report.snapshot.history_days} sessions in live provider</small></div>
       </div>
-      <div className="tab-bar">{(["overview", "evidence", "memory"] as const).map((item) => <button className={tab === item ? "tab active" : "tab"} key={item} onClick={() => setTab(item)}>{item.toUpperCase()}</button>)}</div>
+      <div className="tab-bar">{(["overview", "evidence", "memory", "ledger"] as const).map((item) => <button className={tab === item ? "tab active" : "tab"} key={item} onClick={() => setTab(item)}>{item.toUpperCase()}</button>)}</div>
       {tab === "overview" && <div className="research-grid">
         <article className="panel chart-panel"><div className="panel-head"><span>PRICE / ADJUSTED CLOSE</span><small>{market.available ? `${market.coverage?.bars ?? 0} bars · ${latest?.provider ?? "provider"}` : "UNAVAILABLE"}</small></div><PriceChart points={market.points} /><div className="metrics"><Metric label="LAST" value={latest ? formatNumber(latest.adjusted_close ?? latest.close) : formatNumber(report.snapshot.price)} /><Metric label="DAY MOVE" value={formatPercent(report.snapshot.change_pct)} tone={report.snapshot.change_pct >= 0 ? "positive" : "negative"} /><Metric label="VOLUME RATIO" value={formatNumber(report.snapshot.volume_ratio)} /><Metric label="QUALITY ISSUES" value={formatNumber(market.coverage?.quality_issues, 0)} /></div></article>
         <article className="panel confidence-panel"><div className="panel-head"><span>CONFIDENCE AUDIT</span><small>{report.confidence_meter.regime}</small></div><div className="score-ring"><strong>{report.confidence_meter.score}</strong><span>/ 100</span></div><p>{report.confidence_meter.explanation}</p><div className="coverage-bar"><i style={{ width: `${report.confidence_meter.coverage * 100}%` }} /></div><small>{report.confidence_meter.signals_available}/{report.confidence_meter.signals_total} signals available</small></article>
@@ -75,6 +116,7 @@ export function StockPage() {
       </div>}
       {tab === "evidence" && <article className="panel evidence-panel"><div className="panel-head"><span>LIVE EVIDENCE</span><small>{report.live_news.length} items</small></div>{report.live_news.length ? report.live_news.map((item) => <a className="evidence-row" href={item.url} target="_blank" rel="noreferrer" key={`${item.url}-${item.published}`}><div><strong>{item.title}</strong><small>{item.publisher} · {item.published}</small></div><p>{item.summary}</p><span>↗</span></a>) : <div className="empty-state">No verified live news was returned for this request.</div>}</article>}
       {tab === "memory" && <article className="panel"><div className="panel-head"><span>HINDSIGHT PRECEDENT</span><small>{report.memory_used.backend}</small></div><div className="memory-stat"><strong>{report.historical_precedent.count}</strong><span>matched prior moves</span></div><p>{report.historical_precedent.narrative}</p><p className="muted">Recalled: {report.memory_used.recalled_count} · Stored: {report.memory_used.total_count}</p></article>}
+      {tab === "ledger" && <LedgerPanel ticker={ticker} />}
       {report.warning && <p className="warning-bar">{report.warning}</p>}
       <p className="disclaimer">Research tool, not financial advice. Data availability and timestamps are shown rather than inferred.</p>
     </section>

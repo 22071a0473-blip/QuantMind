@@ -219,11 +219,30 @@ every query to an LLM.
 | `GET /api/signals/{ticker}` | Deterministic signal analysis |
 | `GET /api/memory/{ticker}` | Asset-specific memory status |
 | `GET /api/reflect/{ticker}` | Hindsight reflection |
+| `POST /api/ledger/commit` | Explicitly commit a deterministic forecast |
+| `GET /api/ledger` | Paginated hypothesis list |
+| `GET /api/ledger/{id}` | Hypothesis, resolution, and hash verification |
+| `GET /api/ledger/stats` | Provenance-scoped calibration metrics |
 | `POST /analyze` | Typed asynchronous analysis graph |
 | `GET /docs` | FastAPI OpenAPI documentation |
 
 The legacy `/research` page remains available while the React workspace is the
 primary user experience.
+
+## Hypothesis Ledger
+
+The Ledger is QuantMind's accountability layer. It records an immutable,
+timestamped claim with its information cutoff, provenance, algorithm version,
+evidence identifiers, and deterministic probability. A forecast is committed
+only through `POST /api/ledger/commit`; ordinary report and read routes do not
+write ledger rows.
+
+The current `baseline-v0` compares historical ticker returns with SPY and
+refuses to create a forecast below 30 complete observations. Once the horizon
+elapses, the resolver records adjusted-close returns and classifies the result
+as resolved, censored, or invalidated without filling missing prices. Metrics
+remain hidden until 20 resolved observations exist, and live-forward results
+are never mixed with historical replay results.
 
 ## Build the asset universe
 

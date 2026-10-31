@@ -479,3 +479,8 @@ async def reflect_post(
     ticker: str, query: str = "What patterns emerge from this ticker's historical moves?"
 ) -> dict[str, str]:
     return await reflect_for_ticker(ticker, query)
+
+
+from .ledger_routes import router as ledger_router
+
+app.include_router(ledger_router)
