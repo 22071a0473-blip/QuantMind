@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 from quantmind.app import app
+from quantmind.current_event import detect_current_event
 from quantmind.event_store import EventStore, MarketEvent
 from quantmind.storage import CompanyRecord, MarketBarRecord, SecurityRecord, SQLiteStore
 from quantmind.timemachine import TimeMachineService
@@ -120,3 +121,13 @@ def test_time_machine_forecast_route_rejects_future_dates(tmp_path: Path, monkey
         json={"ticker": "TEST", "as_of": "2999-01-01", "horizon_days": 5},
     )
     assert response.status_code == 422
+
+
+def test_current_event_excludes_bars_available_after_cutoff(tmp_path: Path, monkeypatch) -> None:
+    database = tmp_path / "quantmind.db"
+    query_date = _seed_time_machine_database(database)
+    monkeypatch.setenv("QUANTMIND_DATABASE", str(database))
+    cutoff = datetime.combine(query_date + timedelta(days=1), datetime.min.time(), tzinfo=UTC)
+    event = detect_current_event("TEST", cutoff)
+    assert event is not None
+    assert event.event_date == query_date
