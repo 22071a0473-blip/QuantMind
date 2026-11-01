@@ -136,6 +136,63 @@ export type LedgerItem = {
   verified: boolean;
 };
 
+export type TimeMachineCandidate = {
+  ticker: string;
+  as_of: string;
+  information_cutoff: string;
+  event_id: string;
+  event_type: string;
+  headline: string;
+  available_at: string;
+  history_days: number;
+};
+
+export type TimeMachineMatch = {
+  event_id: string;
+  ticker: string;
+  event_date: string;
+  event_type: string;
+  headline: string;
+  source_url: string;
+  similarity: number;
+  feature_scores: Record<string, number | null>;
+  retrieval_source: string;
+  relaxation_level: string;
+  forward_returns: Record<string, number | null>;
+};
+
+export type TimeMachineForecast = {
+  ticker: string;
+  as_of: string;
+  information_cutoff: string;
+  event: { event_type: string; headline?: string | null; source_url?: string | null };
+  matches: TimeMachineMatch[];
+  distributions: Record<string, {
+    n: number;
+    insufficient_analogues: boolean;
+    median?: number | null;
+    mean?: number | null;
+    iqr?: number | null;
+    hit_rate?: number | null;
+    interval_90?: { lower: number; upper: number } | null;
+    forecast_probability?: number | null;
+    base_rate_scope?: string | null;
+  }>;
+  relaxation_level: string;
+  insufficient_analogues: boolean;
+  hypothesis_id?: string | null;
+  provenance: "historical_replay";
+};
+
+export type TimeMachineReveal = {
+  hypothesis_id: string;
+  revealed: boolean;
+  resolve_after: string;
+  status: string;
+  status_reason?: string | null;
+  resolution?: { realized_abnormal_return: number; outcome: number; end_price_date: string } | null;
+};
+
 export async function searchAssets(query: string, signal: AbortSignal): Promise<SearchResponse> {
   const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`, { signal });
   if (!response.ok) throw new Error(`Search failed (${response.status})`);
@@ -200,4 +257,46 @@ export async function commitForecast(
     throw new Error(payload?.detail ?? `Forecast commit failed (${response.status})`);
   }
   return response.json() as Promise<Hypothesis>;
+}
+
+export async function fetchTimeMachineCandidates(
+  ticker: string,
+  signal: AbortSignal,
+): Promise<{ items: TimeMachineCandidate[]; total: number; limit: number; offset: number }> {
+  const response = await fetch(`/api/timemachine/candidates?ticker=${encodeURIComponent(ticker)}&limit=100`, { signal });
+  if (!response.ok) throw new Error(`Time Machine candidates unavailable (${response.status})`);
+  return response.json() as Promise<{ items: TimeMachineCandidate[]; total: number; limit: number; offset: number }>;
+}
+
+export async function createTimeMachineForecast(
+  ticker: string,
+  asOf: string,
+  horizonDays: 5 | 20 | 60,
+  signal: AbortSignal,
+): Promise<TimeMachineForecast> {
+  const response = await fetch("/api/timemachine/forecast", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ticker, as_of: asOf, horizon_days: horizonDays }),
+    signal,
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { detail?: string } | null;
+    throw new Error(payload?.detail ?? `Historical forecast unavailable (${response.status})`);
+  }
+  return response.json() as Promise<TimeMachineForecast>;
+}
+
+export async function revealTimeMachineForecast(
+  hypothesisId: string,
+  signal: AbortSignal,
+): Promise<TimeMachineReveal> {
+  const response = await fetch("/api/timemachine/reveal", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ hypothesis_id: hypothesisId }),
+    signal,
+  });
+  if (!response.ok) throw new Error(`Historical outcome unavailable (${response.status})`);
+  return response.json() as Promise<TimeMachineReveal>;
 }

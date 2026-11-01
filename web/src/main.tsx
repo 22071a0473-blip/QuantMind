@@ -5,15 +5,16 @@ import { SearchProvider, useSearch } from "./components/SearchPalette";
 import { HomePage } from "./pages/HomePage";
 import { MemoryPage } from "./pages/MemoryPage";
 import { StockPage } from "./pages/StockPage";
+import { TimeMachinePage } from "./pages/TimeMachinePage";
 import "./style.css";
 
 function Header() {
   const { openSearch } = useSearch();
-  return <header className="topbar"><Link to="/" className="brand"><span>QM</span> QUANTMIND</Link><nav><Link to="/">Terminal</Link><Link to="/memory">Memory</Link></nav><button className="search-button" onClick={openSearch}>SEARCH <kbd>CTRL K</kbd></button></header>;
+  return <header className="topbar"><Link to="/" className="brand"><span>QM</span> QUANTMIND</Link><nav><Link to="/">Terminal</Link><Link to="/timemachine">Time Machine</Link><Link to="/memory">Memory</Link></nav><button className="search-button" onClick={openSearch}>SEARCH <kbd>CTRL K</kbd></button></header>;
 }
 
 function App() {
-  return <SearchProvider><Header /><main><Routes><Route path="/" element={<HomePage />} /><Route path="/stock/:symbol" element={<StockPage />} /><Route path="/memory" element={<MemoryPage />} /></Routes></main><footer>QUANTMIND · EVIDENCE-FIRST MARKET RESEARCH · NOT FINANCIAL ADVICE</footer></SearchProvider>;
+  return <SearchProvider><Header /><main><Routes><Route path="/" element={<HomePage />} /><Route path="/stock/:symbol" element={<StockPage />} /><Route path="/timemachine" element={<TimeMachinePage />} /><Route path="/memory" element={<MemoryPage />} /></Routes></main><footer>QUANTMIND · EVIDENCE-FIRST MARKET RESEARCH · NOT FINANCIAL ADVICE</footer></SearchProvider>;
 }
 
 createRoot(document.getElementById("root")!).render(<StrictMode><BrowserRouter><App /></BrowserRouter></StrictMode>);
