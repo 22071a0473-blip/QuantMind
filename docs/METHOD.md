@@ -79,3 +79,8 @@ stable SHA-256 seed derived from event ID, horizon, and cutoff. Current-event
 detection prefers a source-backed event in the previous three trading sessions
 and otherwise requires a price shock above two trailing standard deviations
 and at least 1.5x volume.
+
+SEC Item 5.02 is retained as `leadership_change`, but the item also covers
+routine director appointments and departures. It is therefore a
+leadership/board filing signal, not proof of an executive-performance change;
+the corpus does not claim that every 5.02 filing is economically material.

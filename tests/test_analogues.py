@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
@@ -49,6 +50,18 @@ def test_event_store_upsert_is_idempotent(tmp_path: Path) -> None:
         rows = store.list_events(ticker="CRM")
         assert len(rows) == 1
         assert rows[0].headline == "Updated"
+    finally:
+        store.close()
+
+
+def test_event_store_replacing_ticker_removes_stale_event_ids(tmp_path: Path) -> None:
+    store = EventStore(tmp_path / "events.db")
+    try:
+        store.upsert(event(1, event_type="earnings"))
+        store.replace_ticker_events("CRM", [event(1, event_type="earnings_release")])
+        rows = store.list_events(ticker="CRM")
+        assert len(rows) == 1
+        assert rows[0].event_type == "earnings_release"
     finally:
         store.close()
 
@@ -171,3 +184,18 @@ def test_precedent_rejects_future_cutoff_and_is_empty_without_events(
     response = client.get("/api/precedent/CRM")
     assert response.status_code == 200
     assert response.json()["status"] == "no_event"
+
+
+def test_event_snapshot_round_trip_preserves_event_ids(tmp_path: Path) -> None:
+    snapshot = Path(__file__).parents[1] / "data" / "market_events.jsonl"
+    destination = EventStore(tmp_path / "destination.db")
+    try:
+        expected_ids = {
+            line_data["event_id"]
+            for line_data in (json.loads(line) for line in snapshot.read_text(encoding="utf-8").splitlines())
+            if line_data
+        }
+        assert destination.import_jsonl(snapshot) == len(expected_ids)
+        assert {item.event_id for item in destination.all_events()} == expected_ids
+    finally:
+        destination.close()

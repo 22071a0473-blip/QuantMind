@@ -1,13 +1,43 @@
 {
-  "total": 0,
-  "by_type": {},
-  "by_sector": {},
-  "by_year": {},
-  "null_forward_returns": {
-    "fwd_1d": 0,
-    "fwd_5d": 0,
-    "fwd_20d": 0,
-    "fwd_60d": 0
+  "total": 1502,
+  "by_type": {
+    "cyber_incident": 2,
+    "earnings_release": 651,
+    "leadership_change": 408,
+    "material_agreement": 88,
+    "merger_acquisition": 10,
+    "price_only": 330,
+    "restructuring_layoffs": 13
   },
-  "limited_types": []
+  "by_sector": {
+    "Communication Services": 238,
+    "Consumer Discretionary": 39,
+    "Consumer Staples": 167,
+    "Energy": 75,
+    "Financials": 170,
+    "Health Care": 215,
+    "Industrials": 105,
+    "Information Technology": 402,
+    "Real Estate": 44,
+    "unknown": 47
+  },
+  "by_year": {
+    "2021": 15,
+    "2022": 239,
+    "2023": 234,
+    "2024": 232,
+    "2025": 282,
+    "2026": 500
+  },
+  "null_forward_returns": {
+    "fwd_1d": 7,
+    "fwd_5d": 20,
+    "fwd_20d": 70,
+    "fwd_60d": 134
+  },
+  "limited_types": [
+    "cyber_incident",
+    "merger_acquisition",
+    "restructuring_layoffs"
+  ]
 }

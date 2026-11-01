@@ -10,13 +10,20 @@ from collections import Counter
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 import yfinance as yf
+from dotenv import load_dotenv
 from quantmind.curated_events import CuratedEvent, load_curated_events
 from quantmind.event_memory import QuantMindEventMemory
 from quantmind.event_store import EventStore, MarketEvent, deterministic_event_id
 from quantmind.events import DailyMarketRow, EventRecord, classify_price_event, compute_forward_return
+from quantmind.market_ingestion import YFinanceMarketDataProvider, ingest_market_history
 from quantmind.sec_events import FilingEvent, fetch_8k_events
+from quantmind.storage import CompanyRecord, SecurityRecord, SQLiteStore
+from quantmind.taxonomy import canonical_event_type
+
+load_dotenv()
 
 
 def _universe_asset(ticker: str) -> dict[str, object]:
@@ -33,6 +40,113 @@ def _universe_cik(ticker: str) -> str:
     if not cik:
         raise ValueError(f"No SEC CIK found for {ticker}.")
     return str(cik)
+
+
+def _ensure_security(store: SQLiteStore, ticker: str) -> UUID:
+    existing = store.find_security(ticker)
+    if existing is not None:
+        return existing.security_id
+    asset = _universe_asset(ticker)
+    company_id = uuid5(NAMESPACE_URL, f"quantmind:company:{ticker.upper()}")
+    security_id = uuid5(NAMESPACE_URL, f"quantmind:security:{ticker.upper()}")
+    store.upsert_company(
+        CompanyRecord(
+            company_id=company_id,
+            legal_name=str(asset["name"]),
+            sector=str(asset.get("sector") or "") or None,
+            industry=str(asset.get("industry") or "") or None,
+            is_public=True,
+        )
+    )
+    store.upsert_security(
+        SecurityRecord(
+            security_id=security_id,
+            company_id=company_id,
+            ticker=ticker.upper(),
+            exchange="",
+            currency="USD",
+            cik=str(asset.get("cik") or "") or None,
+        )
+    )
+    return security_id
+
+
+async def ensure_market_data(tickers: list[str], years: int, database: Path) -> None:
+    store = SQLiteStore(database)
+    try:
+        provider = YFinanceMarketDataProvider()
+        start = date.today() - timedelta(days=years * 366)
+        end = date.today()
+        for ticker in [*tickers, "SPY"]:
+            security_id = _ensure_security(store, ticker)
+            if store.market_bars_for_security(security_id, start=start, end=end):
+                continue
+            result = await ingest_market_history(
+                store=store,
+                provider=provider,
+                security_id=security_id,
+                ticker=ticker,
+                start=start,
+                end=end,
+            )
+            print(f"{ticker}: persisted {result.stored_bars} market bars from yfinance")
+    finally:
+        store.close()
+
+
+def load_stored_rows(ticker: str, years: int, database: Path) -> list[DailyMarketRow]:
+    store = SQLiteStore(database)
+    try:
+        security = store.find_security(ticker)
+        spy = store.find_security("SPY")
+        if security is None or spy is None:
+            return []
+        start = date.today() - timedelta(days=years * 366)
+        bars = store.market_bars_for_security(security.security_id, start=start)
+        spy_bars = store.market_bars_for_security(spy.security_id, start=start)
+    finally:
+        store.close()
+    spy_returns = {
+        bar.observed_at.date(): bar.close / previous.close - 1
+        for previous, bar in zip(spy_bars, spy_bars[1:])
+        if previous.close
+    }
+    rows: list[DailyMarketRow] = []
+    for index, bar in enumerate(bars):
+        if index < 20:
+            continue
+        previous = bars[index - 1]
+        if not previous.close:
+            continue
+        returns = [bars[offset].close / bars[offset - 1].close - 1 for offset in range(max(1, index - 20), index + 1)]
+        average_volume = sum((bars[offset].volume or 0.0) for offset in range(index - 20, index)) / 20
+        abnormal = [
+            (bars[offset].close / bars[offset - 1].close - 1) - spy_returns.get(bars[offset].observed_at.date(), 0.0)
+            for offset in range(max(1, index - 20), index + 1)
+        ]
+        mean_abnormal = sum(abnormal) / len(abnormal)
+        sigma = math.sqrt(sum((value - mean_abnormal) ** 2 for value in abnormal) / len(abnormal))
+        rows.append(
+            DailyMarketRow(
+                event_date=bar.observed_at.date(),
+                close=bar.close,
+                return_1d=bar.close / previous.close - 1,
+                return_5d=bar.close / bars[index - 5].close - 1,
+                spy_return_1d=spy_returns.get(bar.observed_at.date()),
+                abnormal_sigma=sigma or None,
+                volume_ratio=(bar.volume or 0.0) / average_volume if average_volume else 0.0,
+                high=bar.high,
+                low=bar.low,
+                pre_drift_20d=bar.close / bars[index - 20].close - 1 if bars[index - 20].close else None,
+                regime_spy_ret_60d=(
+                    spy_bars[-1].close / spy_bars[-61].close - 1
+                    if len(spy_bars) >= 61 and spy_bars[-61].close
+                    else None
+                ),
+                regime_spy_vol_60d=None,
+            )
+        )
+    return rows
 
 
 def load_rows(ticker: str, years: int, spy_history: Any) -> list[DailyMarketRow]:
@@ -84,6 +198,7 @@ def _record_from_row(
     filing_url: str | None = None,
     sector: str | None = None,
     source: str = "Yahoo Finance historical prices",
+    available_at: datetime | None = None,
 ) -> EventRecord:
     def end_date(horizon: int) -> date | None:
         target = row_index + horizon
@@ -93,10 +208,14 @@ def _record_from_row(
         ticker=ticker,
         sector=sector,
         event_date=row.event_date,
-        event_type=event_type,  # type: ignore[arg-type]
+        event_type=canonical_event_type(event_type),
         headline=headline,
         filing_url=filing_url,
+        available_at=available_at or datetime.combine(row.event_date, datetime.min.time(), tzinfo=UTC),
         source=source,
+        pre_drift_20d=row.pre_drift_20d,
+        regime_spy_ret_60d=row.regime_spy_ret_60d,
+        regime_spy_vol_60d=row.regime_spy_vol_60d,
         return_1d=row.return_1d * 100,
         abnormal_return_1d=(row.return_1d - row.spy_return_1d) * 100 if row.spy_return_1d is not None else None,
         volume_ratio=row.volume_ratio,
@@ -112,12 +231,13 @@ def _record_from_row(
     )
 
 
-def market_event(record: EventRecord) -> MarketEvent:
+def market_event(record: EventRecord, security_id: UUID | None = None) -> MarketEvent:
     source_url = record.filing_url or f"https://finance.yahoo.com/quote/{record.ticker}/history/"
-    available_at = datetime.combine(record.event_date, datetime.min.time(), tzinfo=UTC)
+    available_at = record.available_at or datetime.combine(record.event_date, datetime.min.time(), tzinfo=UTC)
     return MarketEvent(
         event_id=deterministic_event_id(record.ticker, record.event_date, record.event_type, source_url),
         ticker=record.ticker,
+        security_id=security_id,
         sector=record.sector,
         event_date=record.event_date,
         available_at=available_at,
@@ -128,6 +248,9 @@ def market_event(record: EventRecord) -> MarketEvent:
         day0_return=record.return_1d,
         day0_abnormal_return=record.abnormal_return_1d,
         volume_ratio=record.volume_ratio,
+        pre_drift_20d=record.pre_drift_20d,
+        regime_spy_ret_60d=record.regime_spy_ret_60d,
+        regime_spy_vol_60d=record.regime_spy_vol_60d,
         fwd_1d=record.forward_return_1d,
         fwd_5d=record.forward_return_5d,
         fwd_20d=record.forward_return_20d,
@@ -176,15 +299,31 @@ def event_records(
         if match is None:
             continue
         index, row = match
-        if filing.event_type == "earnings":
-            explained_dates.add(filing.event_date)
+        if filing.event_type == "earnings_release":
+            filing_index = row_by_date[filing.event_date][0]
+            explained_dates.update(
+                rows[index].event_date
+                for index in range(max(0, filing_index - 2), min(len(rows), filing_index + 3))
+            )
             continue
         source_records.append(
             _record_from_row(
-                ticker, rows, row, index, closes, filing.event_type, filing.headline, filing.filing_url, sector
+                ticker,
+                rows,
+                row,
+                index,
+                closes,
+                filing.event_type,
+                filing.headline,
+                filing.filing_url,
+                sector,
+                available_at=filing.available_at,
             )
         )
-        explained_dates.add(filing.event_date)
+        explained_dates.update(
+            rows[offset].event_date
+            for offset in range(max(0, index - 2), min(len(rows), index + 3))
+        )
     deduplicated_sources: dict[tuple[date, str], EventRecord] = {}
     for record in source_records:
         deduplicated_sources.setdefault((record.event_date, record.event_type), record)
@@ -212,19 +351,17 @@ def earnings_records(
     closes = [row.close for row in rows]
     row_by_date = {row.event_date: (index, row) for index, row in enumerate(rows)}
     records: list[EventRecord] = []
-    candidates: list[tuple[date, float | None, FilingEvent | None]] = []
-    filing_earnings = [filing for filing in filings if filing.event_type == "earnings"]
+    candidates: list[tuple[date, FilingEvent | None]] = []
+    filing_earnings = [filing for filing in filings if filing.event_type == "earnings_release"]
     for timestamp, values in earnings.iterrows():
         event_date = timestamp.date()
-        surprise = values.get("Surprise(%)")
-        surprise_value = float(surprise) if surprise is not None and str(surprise) != "nan" else None
         filing = min(filing_earnings, key=lambda item: abs((item.event_date - event_date).days), default=None)
         if filing is not None and abs((filing.event_date - event_date).days) > 3:
             filing = None
-        candidates.append((event_date, surprise_value, filing))
+        candidates.append((event_date, filing))
     records: list[EventRecord] = []
     seen_quarters: set[tuple[int, int]] = set()
-    for event_date, surprise, filing in candidates:
+    for event_date, filing in candidates:
         quarter = (event_date.year, (event_date.month - 1) // 3)
         if quarter in seen_quarters:
             continue
@@ -232,10 +369,7 @@ def earnings_records(
         match = row_by_date.get(event_date)
         if match is None:
             continue
-        if surprise is None:
-            event_type = "earnings"
-        else:
-            event_type = "earnings_beat" if surprise > 0 else "earnings_miss"
+        event_type = "earnings_release"
         index, row = match
         records.append(_record_from_row(
             ticker, rows, row, index, closes, event_type,
@@ -303,17 +437,20 @@ async def run(args: argparse.Namespace) -> None:
         raise ValueError("Live backfill requires explicit --write; use --dry-run to inspect results.")
     tickers = [ticker.upper() for ticker in args.tickers]
     completed = read_checkpoint(args.checkpoint)
-    spy_history = yf.Ticker("SPY").history(start=date.today() - timedelta(days=args.years * 366), end=date.today() + timedelta(days=1), auto_adjust=False)
+    database = Path("data/quantmind.db")
+    await ensure_market_data(tickers, args.years, database)
     pending_items: list[dict[str, Any]] = []
     pending_tickers: set[str] = set()
     total_counts: Counter[str] = Counter()
     total_record_length = 0
-    event_store = EventStore(Path("data/quantmind.db")) if args.write else None
+    database = Path("data/quantmind.db")
+    event_store = EventStore(database)
+    market_store = SQLiteStore(database)
     for ticker in tickers:
         if ticker in completed:
             print(f"{ticker}: skipped (checkpoint)")
             continue
-        rows = load_rows(ticker, args.years, spy_history)
+        rows = load_stored_rows(ticker, args.years, database)
         asset = _universe_asset(ticker)
         filings = fetch_8k_events(ticker, _universe_cik(ticker))
         curated = [event for event in load_curated_events() if event.ticker == ticker]
@@ -325,10 +462,12 @@ async def run(args: argparse.Namespace) -> None:
         total_counts.update(counts)
         total_record_length += sum(len(record.to_memory_text()) for record in records)
         print(f"{ticker}: {len(rows)} trading rows, {len(records)} events, by type={dict(sorted(counts.items()))}")
+        security_id = _ensure_security(market_store, ticker)
+        event_store.replace_ticker_events(
+            ticker,
+            [market_event(record, security_id) for record in records],
+        )
         if args.write:
-            if event_store is not None:
-                for record in records:
-                    event_store.upsert(market_event(record))
             pending_items.extend(memory_item(record) for record in records)
             pending_tickers.add(ticker)
     print(f"TOTAL: {sum(total_counts.values())} memories, by type={dict(sorted(total_counts.items()))}")
@@ -336,13 +475,16 @@ async def run(args: argparse.Namespace) -> None:
     print(f"Average record length: {average_length:.0f} characters.")
     print("Hindsight credit cost: unverified; measure from account usage before and after a live run.")
     if args.write and pending_items:
+        if args.max_events is not None:
+            pending_items = pending_items[: args.max_events]
         operation_id = f"backfill-{','.join(tickers)}-{args.years}-{args.max_events_per_ticker}"
         count = await QuantMindEventMemory().retain_batch(pending_items, operation_id=operation_id)
-        completed.update(pending_tickers)
+        if args.max_events is None:
+            completed.update(pending_tickers)
         write_checkpoint(args.checkpoint, completed)
         print(f"Retained {count} memories in quantmind-events.")
-    if event_store is not None:
-        event_store.close()
+    event_store.close()
+    market_store.close()
     if args.dry_run:
         print("DRY RUN: no Hindsight calls made.")
 
@@ -352,6 +494,7 @@ def main() -> None:
     parser.add_argument("--tickers", nargs="*")
     parser.add_argument("--years", type=int, default=5)
     parser.add_argument("--max-events-per-ticker", type=int, default=10)
+    parser.add_argument("--max-events", type=int)
     parser.add_argument("--list-events", metavar="TICKER")
     parser.add_argument("--type", dest="event_type")
     parser.add_argument("--dry-run", action="store_true")
@@ -359,9 +502,10 @@ def main() -> None:
     parser.add_argument("--checkpoint", type=checkpoint_path, default=Path(".cache/quantmind-backfill.json"))
     args = parser.parse_args()
     if args.list_events:
-        spy_history = yf.Ticker("SPY").history(start=date.today() - timedelta(days=args.years * 366), end=date.today() + timedelta(days=1), auto_adjust=False)
+        database = Path("data/quantmind.db")
+        asyncio.run(ensure_market_data([args.list_events.upper()], args.years, database))
         ticker = args.list_events.upper()
-        rows = load_rows(ticker, args.years, spy_history)
+        rows = load_stored_rows(ticker, args.years, database)
         asset = _universe_asset(ticker)
         filings = fetch_8k_events(ticker, _universe_cik(ticker))
         curated = [event for event in load_curated_events() if event.ticker == ticker]

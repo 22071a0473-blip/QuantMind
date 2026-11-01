@@ -28,6 +28,8 @@ class EventQuery(BaseModel):
     event_date: date
     available_at: datetime
     event_type: EventType
+    headline: str | None = None
+    source_url: str | None = None
     sector: str | None = None
     day0_abnormal_return: float | None = None
     volume_ratio: float | None = None
@@ -206,10 +208,16 @@ def retrieve_analogues(
 def _same_group(left: EventType, right: EventType) -> bool:
     groups = {
         "earnings": {"earnings", "earnings_beat", "earnings_miss", "guidance_raise", "guidance_cut"},
-        "corporate": {"contract_win", "major_partnership_deal", "m_and_a"},
-        "people": {"leadership_change", "board_change", "layoffs_restructuring"},
+        "corporate": {
+            "contract_win",
+            "major_partnership_deal",
+            "m_and_a",
+            "material_agreement",
+            "merger_acquisition",
+        },
+        "people": {"leadership_change", "board_change", "layoffs_restructuring", "restructuring_layoffs"},
         "risk": {"cyber_incident", "regulatory_legal"},
-        "price": {"price_move"},
+        "price": {"price_move", "price_only"},
     }
     return any(left in members and right in members for members in groups.values())
 

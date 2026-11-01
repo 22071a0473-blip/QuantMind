@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import re
 import threading
@@ -26,7 +27,7 @@ from .confidence_engine import ConfidenceAudit, ConfidenceEngine
 from .current_event import detect_current_event
 from .engine import QuantMindEngine
 from .event_memory import QuantMindEventMemory
-from .event_store import MarketEvent
+from .event_store import EventStore, MarketEvent
 from .llm import GroqResearcher
 from .memory import HindsightMemory
 from .search import ParsedQuery, SearchExecution, SearchResult, fts_query, parse_query
@@ -34,6 +35,7 @@ from .storage import SQLiteStore
 from .universe import AssetKind, SearchResponse, UniverseAsset, list_universe, search_universe
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="QuantMind", version="1.1.0")
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
@@ -56,6 +58,20 @@ _CACHE_TTL_SECONDS = 300.0
 _RATE_WINDOW_SECONDS = 60.0
 _RATE_LIMIT_PER_IP = 30
 _STATE_LOCK = threading.Lock()
+
+
+@app.on_event("startup")
+async def import_event_snapshot_on_startup() -> None:
+    database = Path(os.environ.get("QUANTMIND_DATABASE", "data/quantmind.db"))
+    snapshot = Path(__file__).resolve().parent.parent / "data" / "market_events.jsonl"
+    store = EventStore(database)
+    try:
+        if store.list_events(limit=1) or not snapshot.exists():
+            return
+        imported = store.import_jsonl(snapshot)
+        logger.info("Imported %d market events from %s.", imported, snapshot)
+    finally:
+        store.close()
 
 
 def build_store() -> SQLiteStore:

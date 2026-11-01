@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import sqlite3
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -124,6 +125,7 @@ class EventStore:
                 ?, ?, ?, ?, ?, ?, ?
             )
             ON CONFLICT(event_id) DO UPDATE SET
+                security_id=excluded.security_id,
                 headline=excluded.headline,
                 source_url=excluded.source_url,
                 source_kind=excluded.source_kind,
@@ -162,6 +164,13 @@ class EventStore:
         self.connection.commit()
         return self.get(event.event_id) or event
 
+    def replace_ticker_events(self, ticker: str, events: list[MarketEvent]) -> int:
+        """Replace one ticker's derived corpus so taxonomy changes cannot leave stale rows."""
+        self.connection.execute("DELETE FROM market_events WHERE ticker = ?", (ticker.upper(),))
+        for event in events:
+            self.upsert(event)
+        return len(events)
+
     def get(self, event_id: str) -> MarketEvent | None:
         row = self.connection.execute(
             "SELECT * FROM market_events WHERE event_id = ?", (event_id,)
@@ -195,6 +204,21 @@ class EventStore:
             [*params, limit],
         ).fetchall()
         return [_row_to_event(row) for row in rows]
+
+    def all_events(self) -> list[MarketEvent]:
+        rows = self.connection.execute(
+            "SELECT * FROM market_events ORDER BY event_id"
+        ).fetchall()
+        return [_row_to_event(row) for row in rows]
+
+    def import_jsonl(self, path: Path) -> int:
+        imported = 0
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            self.upsert(MarketEvent.model_validate(json.loads(line)))
+            imported += 1
+        return imported
 
 
 def _row_to_event(row: sqlite3.Row) -> MarketEvent:

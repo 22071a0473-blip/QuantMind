@@ -9,8 +9,11 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+from dotenv import load_dotenv
 from hindsight_client import Hindsight
 from quantmind.event_memory import EVENTS_BANK_ID
+
+load_dotenv()
 
 
 @dataclass(slots=True)

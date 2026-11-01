@@ -6,7 +6,7 @@ import gzip
 import json
 import os
 import time
-from datetime import date
+from datetime import UTC, date, datetime
 from urllib.request import Request, urlopen
 
 from pydantic import BaseModel
@@ -21,6 +21,7 @@ class FilingEvent(BaseModel):
     item_code: str
     headline: str
     filing_url: str
+    available_at: datetime | None = None
 
 
 def _get_json(url: str, user_agent: str) -> dict[str, object]:
@@ -58,24 +59,41 @@ def parse_8k_submissions(ticker: str, cik: str, payload: dict[str, object]) -> l
     accessions = forms["accessionNumber"]  # type: ignore[index]
     primary_documents = forms["primaryDocument"]  # type: ignore[index]
     items = forms["items"]  # type: ignore[index]
+    acceptance_times = forms.get("acceptanceDateTime", [""] * len(form_values))  # type: ignore[union-attr]
     results: list[FilingEvent] = []
     for index, form in enumerate(form_values):
         if form != "8-K":
             continue
         matched = [code for code in str(items[index]).split(",") if code in FILING_ITEM_TYPES]
         for code in matched:
-            headline = str(primary_documents[index])
+            item_description = str(items[index]).replace(",", ", ")
+            primary_document = str(primary_documents[index])
+            headline = f"8-K {item_description}: {primary_document}"
             event_type = FILING_ITEM_TYPES[code]
-            if code == "1.01" and any(word in headline.lower() for word in ("partner", "alliance", "collaboration")):
+            title_lower = headline.lower()
+            if code in {"1.01", "2.01"} and any(
+                word in title_lower for word in ("merger", "acquisition", "acquire", "business combination")
+            ):
+                event_type = "merger_acquisition"
+            elif code == "1.01" and any(
+                word in title_lower for word in ("partner", "alliance", "collaboration")
+            ):
                 event_type = "major_partnership_deal"
             accession = str(accessions[index]).replace("-", "")
+            accepted = str(acceptance_times[index]) if index < len(acceptance_times) else ""
+            available_at = (
+                datetime.fromisoformat(accepted.replace("Z", "+00:00")).astimezone(UTC)
+                if accepted
+                else datetime.combine(date.fromisoformat(str(dates[index])), datetime.min.time(), tzinfo=UTC)
+            )
             results.append(FilingEvent(
                 ticker=ticker,
                 event_date=date.fromisoformat(str(dates[index])),
                 event_type=event_type,
                 item_code=code,
                 headline=headline,
-                filing_url=f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{accession}/{headline}",
+                filing_url=f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{accession}/{primary_document}",
+                available_at=available_at,
             ))
     return results
 

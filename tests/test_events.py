@@ -22,9 +22,9 @@ def test_classifier_rules() -> None:
         return_5d=0.02, volume_ratio=2.5, high=101, low=95,
         abnormal_sigma=0.01,
     )
-    assert classify_price_event(row) == "price_move"
-    assert classify_price_event(row.model_copy(update={"volume_ratio": 1.0, "return_1d": 0.06})) == "price_move"
-    assert classify_price_event(row.model_copy(update={"volume_ratio": 1.0, "return_1d": -0.05})) == "price_move"
+    assert classify_price_event(row) == "price_only"
+    assert classify_price_event(row.model_copy(update={"volume_ratio": 1.0, "return_1d": 0.06})) == "price_only"
+    assert classify_price_event(row.model_copy(update={"volume_ratio": 1.0, "return_1d": -0.05})) == "price_only"
 
 
 def test_forward_return_computation() -> None:
@@ -38,9 +38,9 @@ def test_real_8k_item_fixture_classifies_and_builds_source_url() -> None:
     older = fixture["older"]
     events = parse_8k_pages("CRM", "0001234567", [payload, older])
     assert [(event.item_code, event.event_type) for event in events] == [
-        ("1.01", "contract_win"),
+        ("1.01", "material_agreement"),
         ("5.02", "leadership_change"),
-        ("2.05", "layoffs_restructuring"),
+        ("2.05", "restructuring_layoffs"),
     ]
     assert events[0].filing_url.endswith("/000123456725000001/contract.htm")
     assert any(event.event_date.isoformat() == "2024-01-04" for event in events)

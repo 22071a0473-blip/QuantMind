@@ -46,6 +46,8 @@ def detect_current_event(ticker: str, cutoff: datetime) -> EventQuery | None:
                 event_date=event.event_date,
                 available_at=event.available_at,
                 event_type=event.event_type,
+                headline=event.headline,
+                source_url=event.source_url,
                 sector=event.sector,
                 day0_abnormal_return=event.day0_abnormal_return,
                 volume_ratio=event.volume_ratio,
@@ -97,7 +99,7 @@ def _price_only_event(ticker: str, cutoff: datetime, bars: list[object]) -> Even
         ticker=ticker,
         event_date=latest.observed_at.date(),
         available_at=latest.available_at,
-        event_type="price_move",
+        event_type="price_only",
         day0_abnormal_return=latest_abnormal,
         volume_ratio=volume_ratio,
     )

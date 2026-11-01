@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Literal
 
 from pydantic import BaseModel
@@ -19,10 +19,14 @@ class EventRecord(BaseModel):
     event_type: EventType
     headline: str | None = None
     filing_url: str | None = None
+    available_at: datetime | None = None
     return_1d: float
     abnormal_return_1d: float | None = None
     volume_ratio: float
     close: float
+    pre_drift_20d: float | None = None
+    regime_spy_ret_60d: float | None = None
+    regime_spy_vol_60d: float | None = None
     forward_return_1d: float | None = None
     forward_return_5d: float | None = None
     forward_return_20d: float | None = None
@@ -53,6 +57,7 @@ class EventRecord(BaseModel):
             f"[EVENT] ticker={self.ticker} | sector={self.sector or 'unknown'} | "
             f"date={self.event_date.isoformat()} | type={self.event_type} | "
             f"headline={encoded_headline} | source={self.source} | "
+            f"available_at={self.available_at.astimezone(UTC).isoformat() if self.available_at else 'null'} | "
             f"day0={sign(self.return_1d)} | abnormal={sign(self.abnormal_return_1d)} | "
             f"volume={self.volume_ratio:.4f} | close={self.close:.6f} | "
             f"fwd_1d={sign(self.forward_return_1d)} | fwd_5d={sign(self.forward_return_5d)} | "
@@ -84,6 +89,11 @@ class EventRecord(BaseModel):
             event_type=fields["type"],
             headline=None if fields.get("headline") == "null" else fields.get("headline"),
             filing_url=None if source_url == "null" else source_url,
+            available_at=(
+                datetime.fromisoformat(fields["available_at"].replace("Z", "+00:00"))
+                if fields.get("available_at") not in {None, "null"}
+                else None
+            ),
             return_1d=parse_percent("day0") or 0.0,
             abnormal_return_1d=parse_percent("abnormal"),
             volume_ratio=float(fields.get("volume", "0")),
@@ -110,12 +120,15 @@ class DailyMarketRow(BaseModel):
     volume_ratio: float
     high: float
     low: float
+    pre_drift_20d: float | None = None
+    regime_spy_ret_60d: float | None = None
+    regime_spy_vol_60d: float | None = None
 
 
-def classify_price_event(row: DailyMarketRow) -> Literal["price_move"] | None:
+def classify_price_event(row: DailyMarketRow) -> Literal["price_only"] | None:
     abnormal_move = row.return_1d - (row.spy_return_1d or 0.0)
     if row.abnormal_sigma and abs(abnormal_move) >= 2.0 * row.abnormal_sigma:
-        return "price_move"
+        return "price_only"
     return None
 
 
