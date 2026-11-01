@@ -211,6 +211,8 @@ def test_hindsight_unauthorized_degrades_to_structured_results(tmp_path: Path, m
     async def unauthorized_search(self, query: str, limit: int = 20) -> list:
         raise UnauthorizedError()
 
+    monkeypatch.setenv("HINDSIGHT_API_URL", "https://hindsight.invalid")
+    monkeypatch.setenv("HINDSIGHT_API_TOKEN", "test-token")
     monkeypatch.setattr(QuantMindEventMemory, "search", unauthorized_search)
     query = EventQuery(
         event_id="query",
@@ -234,4 +236,34 @@ def test_hindsight_unauthorized_degrades_to_structured_results(tmp_path: Path, m
     )
     assert study.semantic_status == "unauthorized"
     assert study.semantic_reason == "Hindsight rejected the configured credentials."
+    assert study.matches
+
+
+def test_hindsight_not_configured_degrades_to_structured_results(tmp_path: Path, monkeypatch) -> None:
+    async def unavailable_search(self, query: str, limit: int = 20) -> list:
+        raise KeyError("HINDSIGHT_API_URL")
+
+    monkeypatch.setattr(QuantMindEventMemory, "search", unavailable_search)
+    query = EventQuery(
+        event_id="query",
+        ticker="CRM",
+        event_date=date(2025, 1, 1),
+        available_at=datetime(2025, 1, 2, tzinfo=UTC),
+        event_type="contract_win",
+        sector="Technology",
+        day0_abnormal_return=0.02,
+        volume_ratio=2.0,
+    )
+    store = EventStore(tmp_path / "events.db")
+    try:
+        for index in range(8):
+            store.upsert(event(index))
+    finally:
+        store.close()
+
+    study = asyncio.run(
+        AnalogueService(tmp_path / "events.db").astudy(query, cutoff=query.available_at)
+    )
+    assert study.semantic_status == "unavailable"
+    assert study.semantic_reason == "Hindsight credentials are not configured."
     assert study.matches
