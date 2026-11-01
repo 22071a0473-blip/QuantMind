@@ -8,6 +8,7 @@ from datetime import UTC, date, datetime
 
 from .ledger import Hypothesis, Resolution, get_hypothesis, mark_status
 from .ledger_store import LedgerStore, ResolutionWrite
+from .returns import forward_abnormal_return
 
 
 def _price(bar: object) -> float:
@@ -36,7 +37,62 @@ def _metrics(hypothesis: Hypothesis, raw: float, benchmark: float) -> Resolution
 
 
 def resolve_hypothesis(store: LedgerStore, hypothesis: Hypothesis, now: date | None = None) -> Resolution | None:
-    """Use the first trading day strictly after the information cutoff as entry."""
+    """Resolve live forecasts after the cutoff, or replay forecasts from the as-of close."""
+    if hypothesis.provenance == "historical_replay" and hypothesis.as_of is not None:
+        result = forward_abnormal_return(
+            hypothesis.ticker,
+            hypothesis.as_of,
+            hypothesis.horizon_days,
+            database=store.path,
+            information_cutoff=hypothesis.information_cutoff,
+        )
+        current_date = now or datetime.now(UTC).date()
+        if result is None:
+            mark_status(store, hypothesis.id, "censored", "missing_replay_outcome")
+            return None
+        if result.end_date > current_date:
+            mark_status(store, hypothesis.id, "censored", "future_price_data_not_available")
+            return None
+        raw = result.raw_return / 100
+        benchmark_return = result.benchmark_return / 100
+        abnormal = result.abnormal_return / 100
+        metrics = _metrics(hypothesis, raw, benchmark_return)
+        resolution = Resolution(
+            hypothesis_id=hypothesis.id,
+            resolved_at=datetime.now(UTC),
+            realized_raw_return=raw,
+            realized_benchmark_return=benchmark_return,
+            realized_abnormal_return=abnormal,
+            outcome=metrics.outcome,
+            brier=metrics.brier,
+            log_loss=metrics.log_loss,
+            start_price_date=result.start_date,
+            end_price_date=result.end_date,
+            price_source="structured-bars",
+        )
+        with store.transaction():
+            if store.get_resolution(hypothesis.id) is None:
+                store.insert_resolution(
+                    ResolutionWrite(
+                        hypothesis_id=str(resolution.hypothesis_id),
+                        resolved_at=resolution.resolved_at.isoformat(),
+                        realized_raw_return=resolution.realized_raw_return,
+                        realized_benchmark_return=resolution.realized_benchmark_return,
+                        realized_abnormal_return=resolution.realized_abnormal_return,
+                        outcome=resolution.outcome,
+                        brier=resolution.brier,
+                        log_loss=resolution.log_loss,
+                        start_price_date=resolution.start_price_date.isoformat(),
+                        end_price_date=resolution.end_price_date.isoformat(),
+                        price_source=resolution.price_source,
+                        notes=resolution.notes,
+                    )
+                )
+            store.connection.execute(
+                "UPDATE hypotheses SET status = ?, status_reason = ? WHERE id = ?",
+                ("resolved", None, str(hypothesis.id)),
+            )
+        return resolution
     target = sorted(store.market_bars(hypothesis.ticker), key=lambda bar: bar.observed_at)
     benchmark = sorted(store.market_bars(hypothesis.benchmark), key=lambda bar: bar.observed_at)
     cutoff = hypothesis.information_cutoff

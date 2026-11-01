@@ -152,9 +152,22 @@ class ResolveAfter(BaseModel):
     reason: str | None = None
 
 
-def _resolve_after(store: LedgerStore, ticker: str, cutoff: datetime, horizon: int) -> ResolveAfter:
+def _resolve_after(
+    store: LedgerStore,
+    ticker: str,
+    cutoff: datetime,
+    horizon: int,
+    as_of: date | None = None,
+) -> ResolveAfter:
     bars = [bar for bar in store.market_bars(ticker) if bar.observed_at.date() > cutoff.date()]
     dates = sorted({bar.observed_at.date() for bar in bars})
+    if as_of is not None:
+        visible_dates = sorted({bar.observed_at.date() for bar in store.market_bars(ticker)})
+        if as_of in visible_dates:
+            start_index = visible_dates.index(as_of)
+            end_index = start_index + horizon
+            if end_index < len(visible_dates):
+                return ResolveAfter(date=visible_dates[end_index])
     if len(dates) >= horizon:
         return ResolveAfter(date=dates[horizon - 1])
     return ResolveAfter(date=_weekday_after(cutoff.date(), horizon), reason="approximate_calendar")
@@ -184,7 +197,7 @@ def create_hypothesis(
     hash_version: int = 1,
 ) -> Hypothesis:
     cutoff = information_cutoff.astimezone(UTC)
-    resolve_after = _resolve_after(store, ticker, cutoff, horizon_days)
+    resolve_after = _resolve_after(store, ticker, cutoff, horizon_days, as_of if provenance == "historical_replay" else None)
     security_id = store.security_id(ticker)
     probability = round(predicted_probability, 8)
     claim = (

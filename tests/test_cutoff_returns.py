@@ -83,3 +83,19 @@ def test_forward_return_requires_benchmark_and_complete_horizon(tmp_path: Path) 
     assert forward_abnormal_return("TEST", date(2024, 1, 2), 1, database=database) is None
     with pytest.raises(ValueError, match="positive"):
         forward_abnormal_return("TEST", date(2024, 1, 2), 0, database=database)
+
+
+def test_forward_return_rejects_as_of_bars_not_available_at_cutoff(tmp_path: Path) -> None:
+    database = tmp_path / "quantmind.db"
+    _seed_bars(database)
+    cutoff = datetime(2024, 1, 2, 20, tzinfo=UTC)
+    assert (
+        forward_abnormal_return(
+            "TEST",
+            date(2024, 1, 2),
+            1,
+            database=database,
+            information_cutoff=cutoff,
+        )
+        is None
+    )

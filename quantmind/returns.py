@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from .ledger_store import LedgerStore
@@ -26,6 +26,7 @@ def forward_abnormal_return(
     horizon_trading_days: int,
     *,
     database: Path = Path("data/quantmind.db"),
+    information_cutoff: datetime | None = None,
 ) -> ForwardReturn | None:
     """Measure from the start-date close to the h-th later trading close."""
 
@@ -52,6 +53,12 @@ def forward_abnormal_return(
     end_benchmark = benchmark.get(end_date)
     if start_benchmark is None or end_benchmark is None:
         return None
+    if information_cutoff is not None:
+        cutoff = information_cutoff.astimezone(UTC)
+        target_start_bar = target_by_date[start_date]
+        # A stored observation is not point-in-time visible until its provider availability timestamp.
+        if target_start_bar.available_at > cutoff or start_benchmark.available_at > cutoff:
+            return None
     raw_return = _percentage(end_target, start_target)
     benchmark_return = _percentage(_price(end_benchmark), _price(start_benchmark))
     path = tuple(

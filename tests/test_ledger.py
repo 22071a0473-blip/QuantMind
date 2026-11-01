@@ -1,12 +1,11 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-
-from quantmind.forecast import baseline_forecast
 from quantmind.event_store import EventStore, MarketEvent, deterministic_event_id
+from quantmind.forecast import baseline_forecast
 from quantmind.ledger import HypothesisOverrides, create_hypothesis, supersede, verify_record, view
 from quantmind.ledger_store import LedgerStore
 from quantmind.resolver import resolve_hypothesis
@@ -78,6 +77,32 @@ def test_ledger_creation_is_deduplicated_and_hash_verifies(tmp_path: Path) -> No
         assert first.id == second.id
         assert verify_record(store, first.id)
         assert view(store, first.id).verified
+    finally:
+        store.close()
+
+
+def test_historical_replay_resolves_from_as_of_close(tmp_path: Path) -> None:
+    database = tmp_path / "quantmind.db"
+    seed_market(database)
+    store = LedgerStore(database)
+    try:
+        hypothesis = create_hypothesis(
+            store,
+            ticker="TEST",
+            information_cutoff=datetime(2024, 1, 3, tzinfo=UTC),
+            provenance="historical_replay",
+            event_type="price_only",
+            direction="outperform",
+            horizon_days=5,
+            predicted_probability=0.65,
+            base_rate=0.65,
+            sample_size=40,
+            as_of=datetime(2024, 1, 2, tzinfo=UTC).date(),
+        )
+        resolution = resolve_hypothesis(store, hypothesis, now=date(2024, 1, 20))
+        assert resolution is not None
+        assert resolution.start_price_date == date(2024, 1, 2)
+        assert resolution.end_price_date == date(2024, 1, 7)
     finally:
         store.close()
 
