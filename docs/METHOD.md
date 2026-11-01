@@ -56,6 +56,21 @@ experiments cannot silently improve live calibration metrics. Every row stores
 its cutoff, algorithm version, code version, evidence identifiers, and a
 record hash that can be verified through the API.
 
+## Time Machine replay
+
+The Time Machine treats `as_of=D` as a forecast made after the close on `D`.
+The exclusive information cutoff is therefore `D+1 00:00:00 UTC`; events and
+market bars are eligible only when their provider availability timestamp is
+strictly earlier than that cutoff. Historical hypotheses enter at the as-of
+close, not at a later bar selected with future knowledge.
+
+Forecast responses redact analogue outcomes whose completion date is not before
+the cutoff. The explicit reveal operation is the only path that exposes the
+historical hypothesis's realized outcome after its requested horizon has
+elapsed. `scripts/run_replays.py` processes candidates chronologically and
+supports dry runs; rerunning is safe because the append-only ledger's
+deterministic uniqueness key makes historical replay writes idempotent.
+
 ## Stage 2 analogue engine
 
 Structured events are stored in SQLite `market_events`; Hindsight's shared

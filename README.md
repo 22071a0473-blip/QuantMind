@@ -75,7 +75,9 @@ dashboard-like:
 - responsive layouts for desktop, tablet, and mobile;
 - explicit loading, error, unavailable-data, and incomplete-coverage states.
 
-Open `/` for the workspace and `/stock/{ticker}` for a security monitor.
+Open `/` for the workspace, `/stock/{ticker}` for a security monitor, and
+`/timemachine` to replay a historical forecast without revealing future
+outcomes until the selected horizon has elapsed.
 
 ## Architecture
 
@@ -223,6 +225,9 @@ every query to an LLM.
 | `GET /api/ledger` | Paginated hypothesis list |
 | `GET /api/ledger/{id}` | Hypothesis, resolution, and hash verification |
 | `GET /api/ledger/stats` | Provenance-scoped calibration metrics |
+| `GET /api/timemachine/candidates` | Paginated historical replay candidates |
+| `POST /api/timemachine/forecast` | Cutoff-safe historical forecast with redacted outcomes |
+| `POST /api/timemachine/reveal` | Reveal an elapsed historical replay outcome |
 | `POST /analyze` | Typed asynchronous analysis graph |
 | `GET /docs` | FastAPI OpenAPI documentation |
 
@@ -247,6 +252,20 @@ the resolver records adjusted-close returns and classifies the result as
 resolved, censored, or invalidated without filling missing prices. Metrics
 remain hidden until 20 resolved observations exist, and live-forward results
 are never mixed with historical replay results.
+
+## Time Machine replays
+
+Run a chronological replay batch from the local event corpus. A dry run performs
+the same cutoff-safe analogue analysis without writing hypotheses:
+
+```powershell
+uv run python scripts/run_replays.py --ticker CRM --horizon-days 20 --dry-run
+uv run python scripts/run_replays.py --start 2022-01-01 --end 2024-12-31 --horizon-days 20
+```
+
+The replay runner reports processed candidates, successful forecasts,
+insufficient-analogue refusals, and per-candidate failures. It never uses
+information made available after the selected historical cutoff.
 
 ## Build the asset universe
 

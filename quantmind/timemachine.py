@@ -96,32 +96,37 @@ class TimeMachineService:
     def __init__(self, database: Path | None = None) -> None:
         self.database = database or Path(os.environ.get("QUANTMIND_DATABASE", "data/quantmind.db"))
 
-    def candidates(self, ticker: str, *, limit: int = 100, offset: int = 0) -> TimeMachineCandidatePage:
-        normalized = ticker.upper()
+    def candidates(self, ticker: str | None = None, *, limit: int = 100, offset: int = 0) -> TimeMachineCandidatePage:
+        normalized = ticker.upper() if ticker else None
         event_store = EventStore(self.database)
         ledger_store = LedgerStore(self.database)
         try:
-            bars = ledger_store.market_bars(normalized)
-            dates = sorted({bar.observed_at.date() for bar in bars})
-            events = [
+            all_events = [
                 event
                 for event in event_store.all_events()
-                if event.ticker == normalized and event.event_date in dates
+                if normalized is None or event.ticker == normalized
             ]
+            dates_by_ticker: dict[str, list[date]] = {}
+            for event in all_events:
+                if event.ticker not in dates_by_ticker:
+                    dates_by_ticker[event.ticker] = sorted(
+                        {bar.observed_at.date() for bar in ledger_store.market_bars(event.ticker)}
+                    )
             items = [
                 TimeMachineCandidate(
-                    ticker=normalized,
+                    ticker=event.ticker,
                     as_of=event.event_date,
                     information_cutoff=cutoff_for_as_of(event.event_date).information_cutoff,
                     event_id=event.event_id,
                     event_type=event.event_type,
                     headline=event.headline,
                     available_at=event.available_at,
-                    history_days=sum(candidate < event.event_date for candidate in dates),
+                    history_days=sum(candidate < event.event_date for candidate in dates_by_ticker[event.ticker]),
                 )
-                for event in events
+                for event in all_events
+                if event.event_date in dates_by_ticker[event.ticker]
                 if event.available_at < cutoff_for_as_of(event.event_date).information_cutoff
-                and sum(candidate < event.event_date for candidate in dates) >= 120
+                and sum(candidate < event.event_date for candidate in dates_by_ticker[event.ticker]) >= 120
             ]
         finally:
             event_store.close()
@@ -129,7 +134,14 @@ class TimeMachineService:
         items.sort(key=lambda item: (item.as_of, item.event_id), reverse=True)
         return TimeMachineCandidatePage(items=items[offset : offset + limit], total=len(items), limit=limit, offset=offset)
 
-    async def forecast(self, ticker: str, as_of: date, horizon_days: int) -> TimeMachineForecast:
+    async def forecast(
+        self,
+        ticker: str,
+        as_of: date,
+        horizon_days: int,
+        *,
+        persist_hypothesis: bool = True,
+    ) -> TimeMachineForecast:
         cutoff = cutoff_for_as_of(as_of)
         database = self.database
         ledger_store = LedgerStore(database)
@@ -175,7 +187,7 @@ class TimeMachineService:
         horizon = f"fwd_{horizon_days}d"
         selected = statistics[horizon]
         hypothesis: Hypothesis | None = None
-        if not selected.insufficient_analogues and selected.forecast_probability is not None:
+        if persist_hypothesis and not selected.insufficient_analogues and selected.forecast_probability is not None:
             direction = "outperform" if selected.forecast_probability >= 0.5 else "underperform"
             store = LedgerStore(database)
             try:

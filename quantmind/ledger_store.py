@@ -348,14 +348,19 @@ class LedgerStore:
             ),
         )
 
-    def market_bars(self, ticker: str) -> list[MarketBarRecord]:
-        rows = self.connection.execute(
-            """
-            SELECT b.* FROM market_bars b JOIN securities s ON s.security_id = b.security_id
-            WHERE UPPER(s.ticker) = UPPER(?) ORDER BY b.observed_at, b.provider
-            """,
-            (ticker,),
-        ).fetchall()
+    def market_bars(self, ticker: str | None = None) -> list[MarketBarRecord]:
+        if ticker is None:
+            rows = self.connection.execute(
+                "SELECT * FROM market_bars ORDER BY observed_at, provider"
+            ).fetchall()
+        else:
+            rows = self.connection.execute(
+                """
+                SELECT b.* FROM market_bars b JOIN securities s ON s.security_id = b.security_id
+                WHERE UPPER(s.ticker) = UPPER(?) ORDER BY b.observed_at, b.provider
+                """,
+                (ticker,),
+            ).fetchall()
         return [
             MarketBarRecord(
                 security_id=UUID(row["security_id"]),
