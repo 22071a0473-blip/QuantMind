@@ -89,6 +89,35 @@ def test_retrieval_excludes_future_and_self() -> None:
     assert all(match.event.available_at < query.available_at for match in result.matches)
 
 
+def test_future_extreme_features_do_not_change_cutoff_similarity() -> None:
+    corpus = [event(index) for index in range(12)]
+    query = EventQuery(
+        event_id=corpus[-1].event_id,
+        ticker="CRM",
+        event_date=date(2020, 1, 20),
+        available_at=datetime(2020, 1, 20, tzinfo=UTC),
+        event_type="contract_win",
+        sector="Technology",
+        day0_abnormal_return=0.03,
+        volume_ratio=2.0,
+        pre_drift_20d=0.01,
+        regime_spy_ret_60d=0.04,
+        regime_spy_vol_60d=0.02,
+    )
+    cutoff = query.available_at + timedelta(days=1)
+    baseline = retrieve_analogues(query, corpus, cutoff)
+    future = event(100, event_type="contract_win").model_copy(
+        update={
+            "available_at": cutoff + timedelta(days=1),
+            "pre_drift_20d": 1000.0,
+            "regime_spy_ret_60d": 1000.0,
+            "regime_spy_vol_60d": 1000.0,
+        }
+    )
+    changed = retrieve_analogues(query, [*corpus, future], cutoff)
+    assert changed.model_dump(mode="json") == baseline.model_dump(mode="json")
+
+
 def test_statistics_are_deterministic_and_shrunk() -> None:
     matches = [
         AnalogueMatch(

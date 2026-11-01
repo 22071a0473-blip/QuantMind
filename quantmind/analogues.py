@@ -167,7 +167,8 @@ def retrieve_analogues(
     limit: int = 20,
     semantic_events: Sequence[MarketEvent] | None = None,
 ) -> AnalogueRetrievalResult:
-    eligible = [event for event in corpus if _eligible(query, event, cutoff)]
+    visible = [event for event in corpus if event.available_at < cutoff]
+    eligible = [event for event in visible if _eligible(query, event, cutoff)]
     levels = (
         ("L0", lambda event: event.event_type == query.event_type and event.sector == query.sector),
         ("L1", lambda event: event.event_type == query.event_type),
@@ -180,8 +181,8 @@ def retrieve_analogues(
         matches = [
             AnalogueMatch(
                 event=event,
-                similarity=similarity(query, event, corpus),
-                feature_scores=feature_scores(query, event, corpus),
+                similarity=similarity(query, event, visible),
+                feature_scores=feature_scores(query, event, visible),
                 relaxation_level=level,
             )
             for event in candidates
@@ -195,7 +196,7 @@ def retrieve_analogues(
     for event in semantic_events or []:
         if not _eligible(query, event, cutoff):
             continue
-        score = similarity(query, event, corpus)
+        score = similarity(query, event, visible)
         if score < 0.5:
             continue
         if event.event_id in by_id:
@@ -204,7 +205,7 @@ def retrieve_analogues(
             by_id[event.event_id] = AnalogueMatch(
                 event=event,
                 similarity=score,
-                feature_scores=feature_scores(query, event, corpus),
+                feature_scores=feature_scores(query, event, visible),
                 retrieval_source="semantic",
                 relaxation_level=selected_level,
             )
