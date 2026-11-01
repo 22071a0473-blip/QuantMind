@@ -11,6 +11,7 @@ from datetime import UTC, date, datetime
 from html import escape
 from pathlib import Path
 from typing import Literal
+from uuid import UUID
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Form, HTTPException, Query, Request
@@ -32,6 +33,14 @@ from .llm import GroqResearcher
 from .memory import HindsightMemory
 from .search import ParsedQuery, SearchExecution, SearchResult, fts_query, parse_query
 from .storage import SQLiteStore
+from .timemachine import (
+    TimeMachineCandidatePage,
+    TimeMachineForecast,
+    TimeMachineForecastRequest,
+    TimeMachineReveal,
+    TimeMachineRevealRequest,
+    TimeMachineService,
+)
 from .universe import AssetKind, SearchResponse, UniverseAsset, list_universe, search_universe
 
 load_dotenv()
@@ -151,6 +160,13 @@ async def stock_page(symbol: str) -> HTMLResponse:
 
 @app.get("/memory", response_class=HTMLResponse)
 async def memory_page() -> HTMLResponse:
+    if (_WEB_DIST / "index.html").is_file():
+        return FileResponse(_WEB_DIST / "index.html", media_type="text/html")
+    raise HTTPException(status_code=404, detail="Web application is not built")
+
+
+@app.get("/timemachine", response_class=HTMLResponse)
+async def timemachine_page() -> HTMLResponse:
     if (_WEB_DIST / "index.html").is_file():
         return FileResponse(_WEB_DIST / "index.html", media_type="text/html")
     raise HTTPException(status_code=404, detail="Web application is not built")
@@ -416,6 +432,30 @@ async def precedent(
         "semantic_status": study.semantic_status,
         "semantic_reason": study.semantic_reason,
     }
+
+
+@app.get("/api/timemachine/candidates", response_model=TimeMachineCandidatePage)
+async def timemachine_candidates(
+    ticker: str,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> TimeMachineCandidatePage:
+    normalized = validate_ticker(ticker)
+    return TimeMachineService().candidates(normalized, limit=limit, offset=offset)
+
+
+@app.post("/api/timemachine/forecast", response_model=TimeMachineForecast)
+async def timemachine_forecast(request: TimeMachineForecastRequest) -> TimeMachineForecast:
+    normalized = validate_ticker(request.ticker)
+    try:
+        return await TimeMachineService().forecast(normalized, request.as_of, request.horizon_days)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/timemachine/reveal", response_model=TimeMachineReveal)
+async def timemachine_reveal(request: TimeMachineRevealRequest) -> TimeMachineReveal:
+    return TimeMachineService().reveal(request.hypothesis_id)
 
 
 def _analogue_row_payload(
