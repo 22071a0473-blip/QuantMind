@@ -7,10 +7,11 @@ import asyncio
 import json
 import math
 from collections import Counter
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import NAMESPACE_URL, UUID, uuid5
+from zoneinfo import ZoneInfo
 
 import yfinance as yf
 from dotenv import load_dotenv
@@ -78,18 +79,22 @@ async def ensure_market_data(tickers: list[str], years: int, database: Path) -> 
         start = date.today() - timedelta(days=years * 366)
         end = date.today()
         for ticker in [*tickers, "SPY"]:
-            security_id = _ensure_security(store, ticker)
-            if store.market_bars_for_security(security_id, start=start, end=end):
-                continue
-            result = await ingest_market_history(
-                store=store,
-                provider=provider,
-                security_id=security_id,
-                ticker=ticker,
-                start=start,
-                end=end,
-            )
-            print(f"{ticker}: persisted {result.stored_bars} market bars from yfinance")
+            try:
+                security_id = _ensure_security(store, ticker)
+                if store.market_bars_for_security(security_id, start=start, end=end):
+                    print(f"{ticker}: existing market bars reused")
+                    continue
+                result = await ingest_market_history(
+                    store=store,
+                    provider=provider,
+                    security_id=security_id,
+                    ticker=ticker,
+                    start=start,
+                    end=end,
+                )
+                print(f"{ticker}: persisted {result.stored_bars} market bars from yfinance")
+            except Exception as exc:
+                print(f"{ticker}: FAILED market ingestion ({type(exc).__name__}: {exc})")
     finally:
         store.close()
 
@@ -149,6 +154,24 @@ def load_stored_rows(ticker: str, years: int, database: Path) -> list[DailyMarke
     return rows
 
 
+def filing_reaction_date(filing: FilingEvent, rows: list[DailyMarketRow]) -> date | None:
+    """Map EDGAR availability to the first trading session that could react."""
+    trading_dates = [row.event_date for row in rows]
+    if not trading_dates:
+        return None
+    if filing.event_date < trading_dates[0]:
+        return None
+    eastern = filing.available_at.astimezone(ZoneInfo("America/New_York")) if filing.available_at else None
+    after_close = eastern is not None and eastern.time() >= time(16, 0)
+    for trading_date in trading_dates:
+        if trading_date < filing.event_date:
+            continue
+        if after_close and trading_date == filing.event_date:
+            continue
+        return trading_date
+    return None
+
+
 def load_rows(ticker: str, years: int, spy_history: Any) -> list[DailyMarketRow]:
     history = yf.Ticker(ticker).history(
         start=date.today() - timedelta(days=years * 366),
@@ -170,20 +193,25 @@ def load_rows(ticker: str, years: int, spy_history: Any) -> list[DailyMarketRow]
         for index in range(len(history))
     ]
     for index in range(20, len(history)):
-        average_volume = sum(volume[max(0, index - 20):index]) / 20
+        average_volume = sum(volume[max(0, index - 20) : index]) / 20
         event_date = history.index[index].date()
-        sigma = math.sqrt(sum((value - sum(raw_abnormal[index - 20:index]) / 20) ** 2 for value in raw_abnormal[index - 20:index]) / 20)
-        rows.append(DailyMarketRow(
-            event_date=event_date,
-            close=float(close[index]),
-            return_1d=float(close[index] / close[index - 1] - 1),
-            return_5d=float(close[index] / close[index - 5] - 1),
-            spy_return_1d=spy_by_date.get(event_date),
-            abnormal_sigma=sigma or None,
-            volume_ratio=float(volume[index] / average_volume) if average_volume else 0,
-            high=float(history["High"].iloc[index]),
-            low=float(history["Low"].iloc[index]),
-        ))
+        sigma = math.sqrt(
+            sum((value - sum(raw_abnormal[index - 20 : index]) / 20) ** 2 for value in raw_abnormal[index - 20 : index])
+            / 20
+        )
+        rows.append(
+            DailyMarketRow(
+                event_date=event_date,
+                close=float(close[index]),
+                return_1d=float(close[index] / close[index - 1] - 1),
+                return_5d=float(close[index] / close[index - 5] - 1),
+                spy_return_1d=spy_by_date.get(event_date),
+                abnormal_sigma=sigma or None,
+                volume_ratio=float(volume[index] / average_volume) if average_volume else 0,
+                high=float(history["High"].iloc[index]),
+                low=float(history["Low"].iloc[index]),
+            )
+        )
     return rows
 
 
@@ -295,15 +323,17 @@ def event_records(
         )
         explained_dates.add(event.event_date)
     for filing in filings:
-        match = row_by_date.get(filing.event_date)
+        reaction_date = filing_reaction_date(filing, rows)
+        if reaction_date is None:
+            continue
+        match = row_by_date.get(reaction_date)
         if match is None:
             continue
         index, row = match
         if filing.event_type == "earnings_release":
-            filing_index = row_by_date[filing.event_date][0]
+            filing_index = row_by_date[reaction_date][0]
             explained_dates.update(
-                rows[index].event_date
-                for index in range(max(0, filing_index - 2), min(len(rows), filing_index + 3))
+                rows[index].event_date for index in range(max(0, filing_index - 2), min(len(rows), filing_index + 3))
             )
             continue
         source_records.append(
@@ -317,12 +347,12 @@ def event_records(
                 filing.headline,
                 filing.filing_url,
                 sector,
+                source="SEC EDGAR",
                 available_at=filing.available_at,
             )
         )
         explained_dates.update(
-            rows[offset].event_date
-            for offset in range(max(0, index - 2), min(len(rows), index + 3))
+            rows[offset].event_date for offset in range(max(0, index - 2), min(len(rows), index + 3))
         )
     deduplicated_sources: dict[tuple[date, str], EventRecord] = {}
     for record in source_records:
@@ -366,17 +396,29 @@ def earnings_records(
         if quarter in seen_quarters:
             continue
         seen_quarters.add(quarter)
-        match = row_by_date.get(event_date)
+        reaction_date = filing_reaction_date(filing, rows) if filing else event_date
+        if reaction_date is None:
+            continue
+        match = row_by_date.get(reaction_date)
         if match is None:
             continue
         event_type = "earnings_release"
         index, row = match
-        records.append(_record_from_row(
-            ticker, rows, row, index, closes, event_type,
-            filing.headline if filing else f"{ticker} earnings on {event_date.isoformat()}",
-            filing.filing_url if filing else None,
-            sector,
-        ))
+        records.append(
+            _record_from_row(
+                ticker,
+                rows,
+                row,
+                index,
+                closes,
+                event_type,
+                filing.headline if filing else f"{ticker} earnings on {reaction_date.isoformat()}",
+                filing.filing_url if filing else None,
+                sector,
+                source="SEC EDGAR" if filing else "Yahoo Finance earnings calendar",
+                available_at=filing.available_at if filing else None,
+            )
+        )
     return records
 
 
@@ -452,7 +494,11 @@ async def run(args: argparse.Namespace) -> None:
             continue
         rows = load_stored_rows(ticker, args.years, database)
         asset = _universe_asset(ticker)
-        filings = fetch_8k_events(ticker, _universe_cik(ticker))
+        try:
+            filings = fetch_8k_events(ticker, _universe_cik(ticker))
+        except Exception as exc:
+            print(f"{ticker}: FAILED SEC ingestion ({type(exc).__name__}: {exc})")
+            continue
         curated = [event for event in load_curated_events() if event.ticker == ticker]
         records = event_records(
             ticker, rows, filings, args.max_events_per_ticker, str(asset.get("sector") or "unknown"), curated

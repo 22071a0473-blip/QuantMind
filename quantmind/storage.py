@@ -583,7 +583,7 @@ class SQLiteStore:
             f"""
             SELECT security_id, observed_at, open, high, low, close,
                    adjusted_close, volume, provider, available_at, ingested_at
-            FROM market_bars WHERE {' AND '.join(clauses)}
+            FROM market_bars WHERE {" AND ".join(clauses)}
             ORDER BY observed_at
             """,
             parameters,
@@ -801,13 +801,8 @@ class SQLiteStore:
         return date.fromisoformat(str(row["latest_observation"])[:10])
 
     def coverage_export(self) -> CoverageExport:
-        rows = self._connection.execute(
-            "SELECT security_id, ticker FROM securities ORDER BY ticker"
-        ).fetchall()
-        securities = [
-            self.security_coverage(UUID(row["security_id"]), row["ticker"])
-            for row in rows
-        ]
+        rows = self._connection.execute("SELECT security_id, ticker FROM securities ORDER BY ticker").fetchall()
+        securities = [self.security_coverage(UUID(row["security_id"]), row["ticker"]) for row in rows]
         return CoverageExport(summary=self.coverage(), securities=securities)
 
     def save_research_report(self, report: ResearchReportRecord) -> None:

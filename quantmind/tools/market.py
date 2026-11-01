@@ -15,6 +15,6 @@ class MarketToolResult(ToolResult):
 def calculate_market(asset: str, price: float | None, previous_price: float | None) -> MarketToolResult:
     if price is None or previous_price in (None, 0):
         return MarketToolResult("unavailable", "market", reason="price history unavailable", asset=asset)
-    return MarketToolResult("available", "market", asset=asset, price=price,
-                            change_pct=(price / previous_price - 1) * 100)
-
+    return MarketToolResult(
+        "available", "market", asset=asset, price=price, change_pct=(price / previous_price - 1) * 100
+    )

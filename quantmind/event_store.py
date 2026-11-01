@@ -97,10 +97,7 @@ class EventStore:
                 ON market_events(available_at, event_date);
             """
         )
-        columns = {
-            row["name"]
-            for row in self.connection.execute("PRAGMA table_info(market_events)").fetchall()
-        }
+        columns = {row["name"] for row in self.connection.execute("PRAGMA table_info(market_events)").fetchall()}
         for column in ("fwd_1d_end", "fwd_5d_end", "fwd_20d_end", "fwd_60d_end"):
             if column not in columns:
                 self.connection.execute(f"ALTER TABLE market_events ADD COLUMN {column} TEXT")
@@ -147,18 +144,33 @@ class EventStore:
                 hindsight_document_id=excluded.hindsight_document_id
             """,
             (
-                event.event_id, event.ticker, str(event.security_id) if event.security_id else None,
-                event.sector, event.event_date.isoformat(), event.available_at.isoformat(),
-                event.event_type, event.headline, event.source_url, event.source_kind,
-                event.day0_return, event.day0_abnormal_return, event.volume_ratio,
-                event.pre_drift_20d, event.regime_spy_ret_60d, event.regime_spy_vol_60d,
-                event.market_cap_bucket, event.fwd_1d, event.fwd_5d, event.fwd_20d,
+                event.event_id,
+                event.ticker,
+                str(event.security_id) if event.security_id else None,
+                event.sector,
+                event.event_date.isoformat(),
+                event.available_at.isoformat(),
+                event.event_type,
+                event.headline,
+                event.source_url,
+                event.source_kind,
+                event.day0_return,
+                event.day0_abnormal_return,
+                event.volume_ratio,
+                event.pre_drift_20d,
+                event.regime_spy_ret_60d,
+                event.regime_spy_vol_60d,
+                event.market_cap_bucket,
+                event.fwd_1d,
+                event.fwd_5d,
+                event.fwd_20d,
                 event.fwd_60d,
                 event.fwd_1d_end.isoformat() if event.fwd_1d_end else None,
                 event.fwd_5d_end.isoformat() if event.fwd_5d_end else None,
                 event.fwd_20d_end.isoformat() if event.fwd_20d_end else None,
                 event.fwd_60d_end.isoformat() if event.fwd_60d_end else None,
-                event.hindsight_document_id, event.created_at.isoformat(),
+                event.hindsight_document_id,
+                event.created_at.isoformat(),
             ),
         )
         self.connection.commit()
@@ -172,9 +184,7 @@ class EventStore:
         return len(events)
 
     def get(self, event_id: str) -> MarketEvent | None:
-        row = self.connection.execute(
-            "SELECT * FROM market_events WHERE event_id = ?", (event_id,)
-        ).fetchone()
+        row = self.connection.execute("SELECT * FROM market_events WHERE event_id = ?", (event_id,)).fetchone()
         return _row_to_event(row) if row else None
 
     def get_by_hindsight_document_id(self, document_id: str) -> MarketEvent | None:
@@ -206,9 +216,7 @@ class EventStore:
         return [_row_to_event(row) for row in rows]
 
     def all_events(self) -> list[MarketEvent]:
-        rows = self.connection.execute(
-            "SELECT * FROM market_events ORDER BY event_id"
-        ).fetchall()
+        rows = self.connection.execute("SELECT * FROM market_events ORDER BY event_id").fetchall()
         return [_row_to_event(row) for row in rows]
 
     def import_jsonl(self, path: Path) -> int:

@@ -395,7 +395,12 @@ async def precedent(
         raise HTTPException(status_code=422, detail="cutoff cannot be in the future")
     detected = detect_current_event(normalized, effective_cutoff)
     if detected is None:
-        return {"ticker": normalized, "detected_event": None, "status": "no_event", "cutoff": effective_cutoff.isoformat()}
+        return {
+            "ticker": normalized,
+            "detected_event": None,
+            "status": "no_event",
+            "cutoff": effective_cutoff.isoformat(),
+        }
     service = AnalogueService(Path(os.environ.get("QUANTMIND_DATABASE", "data/quantmind.db")))
     study = await service.astudy(detected, cutoff=effective_cutoff)
     return {
@@ -405,11 +410,11 @@ async def precedent(
         "detected_event": _analogue_row_payload(detected, None),
         "matches": [_analogue_row_payload(match.event, match) for match in study.matches],
         "distributions": {
-            horizon: distribution.model_dump(mode="json")
-            for horizon, distribution in study.statistics.items()
+            horizon: distribution.model_dump(mode="json") for horizon, distribution in study.statistics.items()
         },
         "relaxation_level": study.relaxation_level,
         "semantic_status": study.semantic_status,
+        "semantic_reason": study.semantic_reason,
     }
 
 

@@ -12,4 +12,3 @@ class MacroToolResult(ToolResult):
 
 def macro_unavailable() -> MacroToolResult:
     return MacroToolResult("unavailable", "macro", reason="no verified macro series supplied")
-

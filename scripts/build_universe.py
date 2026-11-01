@@ -15,25 +15,39 @@ from quantmind.universe import UniverseAsset
 
 NASDAQ_URL = "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt"
 OTHER_URL = "https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt"
-COINGECKO_URL = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1"
+COINGECKO_URL = (
+    "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1"
+)
 SEC_URL = "https://www.sec.gov/files/company_tickers.json"
 CACHE_TTL_SECONDS = 86400
 
 # This is the hand-maintained classification layer for the current S&P 100
 # membership. Membership is checked against the downloaded Nasdaq catalog; the
 # metadata stays stable even when a listing changes its provider display name.
-S_AND_P_100 = tuple(dict.fromkeys(
-    "AAPL ABBV ABT ACN ADBE AIG AMD AMGN AMT AMZN AVGO AXP BA BAC BK BKNG BMY BRK-B C CAT CHTR CL CMCSA COF COP COST CRM CSCO CVS CVX DE DHR DIS DOW DUK EMR EXC F FDX GD GE GILD GM GOOG GOOGL GS HD HON IBM INTC INTU JNJ JPM KHC KO LIN LLY LMT LOW MA MCD MDLZ MDT MET META MMM MO MRK MS MSFT NEE NFLX NKE NOW NVDA ORCL PEP PFE PG PLTR PM PYPL QCOM RTX SBUX SCHW SO SPG T TGT TMO TMUS TSLA TXN UNH UNP UPS USB V VZ WFC WMT XOM".split()
-))
+S_AND_P_100 = tuple(
+    dict.fromkeys(
+        "AAPL ABBV ABT ACN ADBE AIG AMD AMGN AMT AMZN AVGO AXP BA BAC BK BKNG BMY BRK-B C CAT CHTR CL CMCSA COF COP COST CRM CSCO CVS CVX DE DHR DIS DOW DUK EMR EXC F FDX GD GE GILD GM GOOG GOOGL GS HD HON IBM INTC INTU JNJ JPM KHC KO LIN LLY LMT LOW MA MCD MDLZ MDT MET META MMM MO MRK MS MSFT NEE NFLX NKE NOW NVDA ORCL PEP PFE PG PLTR PM PYPL QCOM RTX SBUX SCHW SO SPG T TGT TMO TMUS TSLA TXN UNH UNP UPS USB V VZ WFC WMT XOM".split()
+    )
+)
 
 SECTOR_BY_SYMBOL: dict[str, tuple[str, str]] = {
-    **dict.fromkeys("AAPL ACN ADBE AMD AVGO CSCO IBM INTC INTU MSFT NVDA ORCL PLTR QCOM TXN".split(), ("Information Technology", "Technology Hardware, Storage & Peripherals")),
-    **dict.fromkeys("AMGN ABBV ABT BMY CVS DHR GILD JNJ LLY MDT MRK PFE TMO".split(), ("Health Care", "Pharmaceuticals")),
-    **dict.fromkeys("AMZN BKNG CHTR CMCSA DIS NFLX T META GOOG GOOGL".split(), ("Communication Services", "Interactive Media & Services")),
+    **dict.fromkeys(
+        "AAPL ACN ADBE AMD AVGO CSCO IBM INTC INTU MSFT NVDA ORCL PLTR QCOM TXN".split(),
+        ("Information Technology", "Technology Hardware, Storage & Peripherals"),
+    ),
+    **dict.fromkeys(
+        "AMGN ABBV ABT BMY CVS DHR GILD JNJ LLY MDT MRK PFE TMO".split(), ("Health Care", "Pharmaceuticals")
+    ),
+    **dict.fromkeys(
+        "AMZN BKNG CHTR CMCSA DIS NFLX T META GOOG GOOGL".split(),
+        ("Communication Services", "Interactive Media & Services"),
+    ),
     **dict.fromkeys("AXP BAC BK BKNG C JPM MA MET MS SCHW USB V WFC COF GS".split(), ("Financials", "Banks")),
     **dict.fromkeys("BA CAT DE EMR F FDX GD GE GM HON LMT RTX UNP UPS".split(), ("Industrials", "Aerospace & Defense")),
     **dict.fromkeys("AMT DUK EXC NEE SO".split(), ("Utilities", "Electric Utilities")),
-    **dict.fromkeys("CL COST KO KHC LOW MCD MDLZ MO NKE PEP PG PM SBUX TGT WMT".split(), ("Consumer Staples", "Consumer Products")),
+    **dict.fromkeys(
+        "CL COST KO KHC LOW MCD MDLZ MO NKE PEP PG PM SBUX TGT WMT".split(), ("Consumer Staples", "Consumer Products")
+    ),
     **dict.fromkeys("COP CVX DOW LIN XOM".split(), ("Energy", "Integrated Oil & Gas")),
     **dict.fromkeys("BRK-B".split(), ("Financials", "Multi-Sector Holdings")),
     **dict.fromkeys("AIG".split(), ("Financials", "Insurance")),
@@ -130,27 +144,35 @@ def build(output: Path, cache_dir: Path, user_agent: str) -> int:
 
     cik_by_ticker = parse_sec(cached("company_tickers.json", SEC_URL))
     assets: dict[str, UniverseAsset] = {}
-    for asset in (*parse_nasdaq(cached("nasdaqlisted.txt", NASDAQ_URL)), *parse_other(cached("otherlisted.txt", OTHER_URL))):
+    for asset in (
+        *parse_nasdaq(cached("nasdaqlisted.txt", NASDAQ_URL)),
+        *parse_other(cached("otherlisted.txt", OTHER_URL)),
+    ):
         metadata = SECTOR_BY_SYMBOL.get(asset.symbol)
-        assets[asset.symbol] = asset.model_copy(update={
-            "cik": cik_by_ticker.get(asset.symbol),
-            "sector": metadata[0] if metadata else None,
-            "industry": metadata[1] if metadata else None,
-            "in_sp100": asset.symbol in S_AND_P_100,
-            "name": "Berkshire Hathaway Class B" if asset.symbol == "BRK-B" else asset.name,
-            "aliases": ["berkshire", "berkshire hathaway"] if asset.symbol == "BRK-B" else asset.aliases,
-        })
+        assets[asset.symbol] = asset.model_copy(
+            update={
+                "cik": cik_by_ticker.get(asset.symbol),
+                "sector": metadata[0] if metadata else None,
+                "industry": metadata[1] if metadata else None,
+                "in_sp100": asset.symbol in S_AND_P_100,
+                "name": "Berkshire Hathaway Class B" if asset.symbol == "BRK-B" else asset.name,
+                "aliases": ["berkshire", "berkshire hathaway"] if asset.symbol == "BRK-B" else asset.aliases,
+            }
+        )
     for symbol in S_AND_P_100:
         metadata = SECTOR_BY_SYMBOL[symbol]
-        assets.setdefault(symbol, UniverseAsset(
-            symbol=symbol,
-            name=symbol,
-            kind="stock",
-            sector=metadata[0],
-            industry=metadata[1],
-            cik=cik_by_ticker.get(symbol),
-            in_sp100=True,
-        ))
+        assets.setdefault(
+            symbol,
+            UniverseAsset(
+                symbol=symbol,
+                name=symbol,
+                kind="stock",
+                sector=metadata[0],
+                industry=metadata[1],
+                cik=cik_by_ticker.get(symbol),
+                in_sp100=True,
+            ),
+        )
     for item in json.loads(cached("coingecko-top-250.json", COINGECKO_URL)):
         symbol = f"CRYPTO:{item['id']}"
         assets[symbol] = UniverseAsset(
@@ -162,7 +184,16 @@ def build(output: Path, cache_dir: Path, user_agent: str) -> int:
             aliases=[str(item["symbol"]).lower()],
         )
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps([asset.model_dump(exclude={"search_terms"}) for asset in sorted(assets.values(), key=lambda item: item.symbol)], indent=2), encoding="utf-8")
+    output.write_text(
+        json.dumps(
+            [
+                asset.model_dump(exclude={"search_terms"})
+                for asset in sorted(assets.values(), key=lambda item: item.symbol)
+            ],
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     return len(assets)
 
 

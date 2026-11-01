@@ -1,3 +1,4 @@
+import asyncio
 import json
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -6,6 +7,8 @@ from fastapi.testclient import TestClient
 
 from quantmind.analogue_stats import compute_statistics, stable_seed
 from quantmind.analogues import AnalogueMatch, EventQuery, feature_scores, retrieve_analogues, similarity
+from quantmind.analogue_retrieval import AnalogueService
+from quantmind.event_memory import QuantMindEventMemory
 from quantmind.event_store import EventStore, MarketEvent, deterministic_event_id
 
 
@@ -199,3 +202,36 @@ def test_event_snapshot_round_trip_preserves_event_ids(tmp_path: Path) -> None:
         assert {item.event_id for item in destination.all_events()} == expected_ids
     finally:
         destination.close()
+
+
+def test_hindsight_unauthorized_degrades_to_structured_results(tmp_path: Path, monkeypatch) -> None:
+    class UnauthorizedError(Exception):
+        status_code = 401
+
+    async def unauthorized_search(self, query: str, limit: int = 20) -> list:
+        raise UnauthorizedError()
+
+    monkeypatch.setattr(QuantMindEventMemory, "search", unauthorized_search)
+    query = EventQuery(
+        event_id="query",
+        ticker="CRM",
+        event_date=date(2025, 1, 1),
+        available_at=datetime(2025, 1, 2, tzinfo=UTC),
+        event_type="contract_win",
+        sector="Technology",
+        day0_abnormal_return=0.02,
+        volume_ratio=2.0,
+    )
+    store = EventStore(tmp_path / "events.db")
+    try:
+        for index in range(8):
+            store.upsert(event(index))
+    finally:
+        store.close()
+
+    study = asyncio.run(
+        AnalogueService(tmp_path / "events.db").astudy(query, cutoff=query.available_at)
+    )
+    assert study.semantic_status == "unauthorized"
+    assert study.semantic_reason == "Hindsight rejected the configured credentials."
+    assert study.matches

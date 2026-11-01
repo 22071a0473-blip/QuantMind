@@ -61,10 +61,12 @@ def resolve_hypothesis(store: LedgerStore, hypothesis: Hypothesis, now: date | N
             mark_status(store, hypothesis.id, "censored", "future_price_data_not_available")
         else:
             missing = [
-                symbol for symbol, bar in (
+                symbol
+                for symbol, bar in (
                     (hypothesis.ticker, target_end),
                     (hypothesis.benchmark, benchmark_end),
-                ) if bar is None
+                )
+                if bar is None
             ]
             mark_status(store, hypothesis.id, "invalidated", f"missing_price_data:{','.join(missing)}:{expected_end}")
         return None
@@ -73,28 +75,36 @@ def resolve_hypothesis(store: LedgerStore, hypothesis: Hypothesis, now: date | N
     abnormal = raw - benchmark_return
     metrics = _metrics(hypothesis, raw, benchmark_return)
     resolution = Resolution(
-        hypothesis_id=hypothesis.id, resolved_at=datetime.now(UTC), realized_raw_return=raw,
-        realized_benchmark_return=benchmark_return, realized_abnormal_return=abnormal,
-        outcome=metrics.outcome, brier=metrics.brier, log_loss=metrics.log_loss,
-        start_price_date=start.observed_at.date(), end_price_date=expected_end,
+        hypothesis_id=hypothesis.id,
+        resolved_at=datetime.now(UTC),
+        realized_raw_return=raw,
+        realized_benchmark_return=benchmark_return,
+        realized_abnormal_return=abnormal,
+        outcome=metrics.outcome,
+        brier=metrics.brier,
+        log_loss=metrics.log_loss,
+        start_price_date=start.observed_at.date(),
+        end_price_date=expected_end,
         price_source=f"{start.provider}/{benchmark_start.provider}",
     )
     with store.transaction():
         if store.get_resolution(hypothesis.id) is None:
-            store.insert_resolution(ResolutionWrite(
-                hypothesis_id=str(resolution.hypothesis_id),
-                resolved_at=resolution.resolved_at.isoformat(),
-                realized_raw_return=resolution.realized_raw_return,
-                realized_benchmark_return=resolution.realized_benchmark_return,
-                realized_abnormal_return=resolution.realized_abnormal_return,
-                outcome=resolution.outcome,
-                brier=resolution.brier,
-                log_loss=resolution.log_loss,
-                start_price_date=resolution.start_price_date.isoformat(),
-                end_price_date=resolution.end_price_date.isoformat(),
-                price_source=resolution.price_source,
-                notes=resolution.notes,
-            ))
+            store.insert_resolution(
+                ResolutionWrite(
+                    hypothesis_id=str(resolution.hypothesis_id),
+                    resolved_at=resolution.resolved_at.isoformat(),
+                    realized_raw_return=resolution.realized_raw_return,
+                    realized_benchmark_return=resolution.realized_benchmark_return,
+                    realized_abnormal_return=resolution.realized_abnormal_return,
+                    outcome=resolution.outcome,
+                    brier=resolution.brier,
+                    log_loss=resolution.log_loss,
+                    start_price_date=resolution.start_price_date.isoformat(),
+                    end_price_date=resolution.end_price_date.isoformat(),
+                    price_source=resolution.price_source,
+                    notes=resolution.notes,
+                )
+            )
         store.connection.execute(
             "UPDATE hypotheses SET status = ?, status_reason = ? WHERE id = ?",
             ("resolved", None, str(hypothesis.id)),

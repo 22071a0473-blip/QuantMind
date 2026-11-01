@@ -27,10 +27,7 @@ def main() -> int:
             return 0
         resolved = resolve_open(store, ticker=args.ticker, limit=args.limit)
         print(f"resolved={len(resolved)}")
-        counts = {
-            row["status"]: int(row["count"])
-            for row in store.stats()
-        }
+        counts = {row["status"]: int(row["count"]) for row in store.stats()}
         for status in ("open", "censored", "resolved", "invalidated"):
             print(f"{status}={counts.get(status, 0)}")
         if resolved:

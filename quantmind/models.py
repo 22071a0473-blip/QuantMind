@@ -174,6 +174,7 @@ class AnaloguePrecedent(BaseModel):
     distributions: dict[str, AnalogueDistribution] = Field(default_factory=dict)
     relaxation_level: str | None = None
     semantic_status: str = "not_requested"
+    semantic_reason: str | None = None
     insufficient_analogues: bool = False
 
 

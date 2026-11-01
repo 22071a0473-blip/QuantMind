@@ -17,4 +17,3 @@ def utc_now() -> datetime:
 def mean(values: Iterable[float]) -> float:
     items = list(values)
     return sum(items) / len(items) if items else 0.0
-

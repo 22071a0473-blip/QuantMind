@@ -12,4 +12,3 @@ class FlowsToolResult(ToolResult):
 
 def flows_unavailable() -> FlowsToolResult:
     return FlowsToolResult("unavailable", "flows", reason="no verified flow series supplied")
-

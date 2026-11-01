@@ -87,10 +87,7 @@ def _quantile(values: list[float], probability: float) -> float:
 
 def _bootstrap_interval(values: list[float], seed: int) -> BootstrapInterval:
     rng = random.Random(seed)
-    samples = [
-        median([values[rng.randrange(len(values))] for _ in values])
-        for _ in range(1000)
-    ]
+    samples = [median([values[rng.randrange(len(values))] for _ in values]) for _ in range(1000)]
     samples.sort()
     return BootstrapInterval(lower=samples[49], upper=samples[949])
 

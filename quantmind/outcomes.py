@@ -25,10 +25,7 @@ def resolve_forecast(
     bars: list[MarketBarRecord],
 ) -> OutcomeResolution:
     ordered = sorted(bars, key=lambda bar: ensure_utc(bar.observed_at))
-    decision_bars = [
-        bar for bar in ordered
-        if ensure_utc(bar.observed_at) >= ensure_utc(forecast.created_at)
-    ]
+    decision_bars = [bar for bar in ordered if ensure_utc(bar.observed_at) >= ensure_utc(forecast.created_at)]
     if not decision_bars:
         return OutcomeResolution(
             forecast_id=forecast.forecast_id,

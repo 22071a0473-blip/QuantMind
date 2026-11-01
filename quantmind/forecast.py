@@ -62,13 +62,18 @@ def baseline_forecast(
         sample_size = len(observations)
         if sample_size < 30:
             return ForecastDraft(
-                ticker=ticker.upper(), available=False, sample_size=sample_size,
+                ticker=ticker.upper(),
+                available=False,
+                sample_size=sample_size,
                 reason=f"Only {sample_size} complete benchmark observations; at least 30 are required.",
             )
         probability = sum(value > 0 for value in observations) / sample_size
         return ForecastDraft(
-            ticker=ticker.upper(), available=True, probability=probability,
-            base_rate=probability, sample_size=sample_size,
+            ticker=ticker.upper(),
+            available=True,
+            probability=probability,
+            base_rate=probability,
+            sample_size=sample_size,
         )
     finally:
         if owned:

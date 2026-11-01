@@ -21,7 +21,9 @@ def seed_market(path: Path, *, days: int = 80) -> None:
     benchmark_company_id = uuid4()
     start = datetime(2024, 1, 2, 21, tzinfo=UTC)
     structured.upsert_company(CompanyRecord(company_id=company_id, legal_name="Example Corp", is_public=True))
-    structured.upsert_company(CompanyRecord(company_id=benchmark_company_id, legal_name="Benchmark ETF", is_public=True))
+    structured.upsert_company(
+        CompanyRecord(company_id=benchmark_company_id, legal_name="Benchmark ETF", is_public=True)
+    )
     structured.upsert_security(SecurityRecord(security_id=target_id, company_id=company_id, ticker="TEST"))
     structured.upsert_security(SecurityRecord(security_id=benchmark_id, company_id=benchmark_company_id, ticker="SPY"))
     target = []

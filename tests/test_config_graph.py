@@ -34,8 +34,13 @@ def test_graph_uses_live_headlines_and_can_skip_memory() -> None:
                 snapshot=MarketSnapshot(asset=asset, kind="stock", price=10, change_pct=1, history_days=20),
                 evidence=[],
                 news=[
-                    NewsItem(title="Contract award lifts demand", publisher="Wire", url="https://example.com",
-                             published="2025-01-01", summary=""),
+                    NewsItem(
+                        title="Contract award lifts demand",
+                        publisher="Wire",
+                        url="https://example.com",
+                        published="2025-01-01",
+                        summary="",
+                    ),
                 ],
                 features=MarketFeatures(1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0.5, 1),
             )
@@ -47,11 +52,7 @@ def test_graph_uses_live_headlines_and_can_skip_memory() -> None:
         async def recall(self, asset: str, query: str) -> RecalledMemory:
             raise AssertionError(f"memory should be skipped: {query}")
 
-    state = asyncio.run(
-        AgentGraph(FakeSources(), FakeMemory()).run(
-            AgentState(asset="ACME", memory_enabled=False)
-        )
-    )
+    state = asyncio.run(AgentGraph(FakeSources(), FakeMemory()).run(AgentState(asset="ACME", memory_enabled=False)))
     assert state.phase == GraphPhase.COMPLETE
     assert state.recalled is not None
     assert state.recalled.records == []

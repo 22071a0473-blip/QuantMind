@@ -27,16 +27,81 @@ class Parameter:
 
 def _parameters() -> tuple[Parameter, ...]:
     names = (
-        ("market", ("price_change_1d", "price_change_5d", "price_change_20d", "volume_ratio", "liquidity",
-                    "market_cap", "price_history", "spread", "intraday_range", "relative_strength")),
-        ("technical", ("volatility", "drawdown", "momentum", "trend_slope", "sma20_distance", "sma50_distance",
-                       "high_low_position", "support", "resistance", "breakout")),
-        ("fundamental", ("revenue_growth", "earnings_growth", "margin", "cash_flow", "leverage", "valuation",
-                         "guidance", "insider_alignment", "capital_allocation", "filing_quality")),
-        ("macro", ("rates", "inflation", "employment", "gdp", "fx", "credit_spread", "commodity", "liquidity",
-                   "policy", "macro_regime")),
-        ("sentiment", ("news_count", "news_recency", "source_quality", "headline_consensus", "catalyst",
-                       "social_breadth", "analyst_revision", "short_interest", "memory_precedent", "event_clarity")),
+        (
+            "market",
+            (
+                "price_change_1d",
+                "price_change_5d",
+                "price_change_20d",
+                "volume_ratio",
+                "liquidity",
+                "market_cap",
+                "price_history",
+                "spread",
+                "intraday_range",
+                "relative_strength",
+            ),
+        ),
+        (
+            "technical",
+            (
+                "volatility",
+                "drawdown",
+                "momentum",
+                "trend_slope",
+                "sma20_distance",
+                "sma50_distance",
+                "high_low_position",
+                "support",
+                "resistance",
+                "breakout",
+            ),
+        ),
+        (
+            "fundamental",
+            (
+                "revenue_growth",
+                "earnings_growth",
+                "margin",
+                "cash_flow",
+                "leverage",
+                "valuation",
+                "guidance",
+                "insider_alignment",
+                "capital_allocation",
+                "filing_quality",
+            ),
+        ),
+        (
+            "macro",
+            (
+                "rates",
+                "inflation",
+                "employment",
+                "gdp",
+                "fx",
+                "credit_spread",
+                "commodity",
+                "liquidity",
+                "policy",
+                "macro_regime",
+            ),
+        ),
+        (
+            "sentiment",
+            (
+                "news_count",
+                "news_recency",
+                "source_quality",
+                "headline_consensus",
+                "catalyst",
+                "social_breadth",
+                "analyst_revision",
+                "short_interest",
+                "memory_precedent",
+                "event_clarity",
+            ),
+        ),
     )
     items: list[Parameter] = []
     for vector_name, vector_names in names:
@@ -46,9 +111,7 @@ def _parameters() -> tuple[Parameter, ...]:
 
 
 CONFIDENCE_PARAMETERS = _parameters()
-VECTOR_WEIGHTS: dict[ConfidenceVector, float] = {
-    vector: 0.2 for vector in ConfidenceVector
-}
+VECTOR_WEIGHTS: dict[ConfidenceVector, float] = {vector: 0.2 for vector in ConfidenceVector}
 
 
 class ParameterAudit(BaseModel):
@@ -89,11 +152,17 @@ class ConfidenceEngine:
             else:
                 vector_values[parameter.vector].append(value)
                 contribution = value * parameter.weight
-            audits.append(ParameterAudit(name=parameter.name, vector=parameter.vector, value=value,
-                                         available=value is not None, contribution=contribution))
+            audits.append(
+                ParameterAudit(
+                    name=parameter.name,
+                    vector=parameter.vector,
+                    value=value,
+                    available=value is not None,
+                    contribution=contribution,
+                )
+            )
         vector_scores = {
-            vector: round(sum(values) / len(values), 4) if values else 0.0
-            for vector, values in vector_values.items()
+            vector: round(sum(values) / len(values), 4) if values else 0.0 for vector, values in vector_values.items()
         }
         score = sum(vector_scores[vector] * weight for vector, weight in self.vector_weights.items())
         available = len(self.parameters) - len(missing)
@@ -108,4 +177,3 @@ class ConfidenceEngine:
             missing=missing,
             explanation=f"{available}/{len(self.parameters)} deterministic parameters available.",
         )
-

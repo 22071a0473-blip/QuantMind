@@ -172,9 +172,7 @@ class LedgerStore:
             BEGIN SELECT RAISE(ABORT, 'resolutions are immutable'); END;
             """
         )
-        columns = {
-            row["name"] for row in self.connection.execute("PRAGMA table_info(hypotheses)").fetchall()
-        }
+        columns = {row["name"] for row in self.connection.execute("PRAGMA table_info(hypotheses)").fetchall()}
         for column, definition in (
             ("relaxation_level", "TEXT"),
             ("base_rate_scope", "TEXT"),
@@ -211,15 +209,34 @@ class LedgerStore:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    values.id, values.ticker, values.security_id, values.created_at,
-                    values.information_cutoff, values.as_of, values.provenance,
-                    values.event_type, values.claim_text, values.direction,
-                    values.horizon_days, values.predicted_probability, values.benchmark,
-                    values.threshold, values.base_rate, values.sample_size,
-                    values.forecast_algo_version, values.code_version, values.evidence_ids,
-                    values.memory_ids_used, values.supersedes_id, values.status,
-                    values.status_reason, values.resolve_after, values.record_hash,
-                    values.relaxation_level, values.base_rate_scope, values.analogue_count,
+                    values.id,
+                    values.ticker,
+                    values.security_id,
+                    values.created_at,
+                    values.information_cutoff,
+                    values.as_of,
+                    values.provenance,
+                    values.event_type,
+                    values.claim_text,
+                    values.direction,
+                    values.horizon_days,
+                    values.predicted_probability,
+                    values.benchmark,
+                    values.threshold,
+                    values.base_rate,
+                    values.sample_size,
+                    values.forecast_algo_version,
+                    values.code_version,
+                    values.evidence_ids,
+                    values.memory_ids_used,
+                    values.supersedes_id,
+                    values.status,
+                    values.status_reason,
+                    values.resolve_after,
+                    values.record_hash,
+                    values.relaxation_level,
+                    values.base_rate_scope,
+                    values.analogue_count,
                     values.hash_version,
                 ),
             )
@@ -237,9 +254,15 @@ class LedgerStore:
             ORDER BY created_at LIMIT 1
             """,
             (
-                values.ticker, values.provenance, values.as_of, values.created_at,
-                values.event_type, values.horizon_days, values.direction,
-                values.forecast_algo_version, values.supersedes_id,
+                values.ticker,
+                values.provenance,
+                values.as_of,
+                values.created_at,
+                values.event_type,
+                values.horizon_days,
+                values.direction,
+                values.forecast_algo_version,
+                values.supersedes_id,
             ),
         ).fetchone()
         if row is None:
@@ -310,10 +333,17 @@ class LedgerStore:
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                values.hypothesis_id, values.resolved_at, values.realized_raw_return,
-                values.realized_benchmark_return, values.realized_abnormal_return,
-                values.outcome, values.brier, values.log_loss,
-                values.start_price_date, values.end_price_date, values.price_source,
+                values.hypothesis_id,
+                values.resolved_at,
+                values.realized_raw_return,
+                values.realized_benchmark_return,
+                values.realized_abnormal_return,
+                values.outcome,
+                values.brier,
+                values.log_loss,
+                values.start_price_date,
+                values.end_price_date,
+                values.price_source,
                 values.notes,
             ),
         )
@@ -330,9 +360,14 @@ class LedgerStore:
             MarketBarRecord(
                 security_id=UUID(row["security_id"]),
                 observed_at=datetime.fromisoformat(row["observed_at"]),
-                open=row["open"], high=row["high"], low=row["low"], close=row["close"],
-                adjusted_close=row["adjusted_close"], volume=row["volume"],
-                provider=row["provider"], available_at=datetime.fromisoformat(row["available_at"]),
+                open=row["open"],
+                high=row["high"],
+                low=row["low"],
+                close=row["close"],
+                adjusted_close=row["adjusted_close"],
+                volume=row["volume"],
+                provider=row["provider"],
+                available_at=datetime.fromisoformat(row["available_at"]),
                 ingested_at=datetime.fromisoformat(row["ingested_at"]),
             )
             for row in rows

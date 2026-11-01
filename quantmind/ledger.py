@@ -153,10 +153,7 @@ class ResolveAfter(BaseModel):
 
 
 def _resolve_after(store: LedgerStore, ticker: str, cutoff: datetime, horizon: int) -> ResolveAfter:
-    bars = [
-        bar for bar in store.market_bars(ticker)
-        if bar.observed_at.date() > cutoff.date()
-    ]
+    bars = [bar for bar in store.market_bars(ticker) if bar.observed_at.date() > cutoff.date()]
     dates = sorted({bar.observed_at.date() for bar in bars})
     if len(dates) >= horizon:
         return ResolveAfter(date=dates[horizon - 1])
@@ -191,19 +188,36 @@ def create_hypothesis(
     security_id = store.security_id(ticker)
     probability = round(predicted_probability, 8)
     claim = (
-        f"{ticker.upper()} will {direction} {threshold:.2%} versus {('SPY')} "
-        f"over the next {horizon_days} trading days."
+        f"{ticker.upper()} will {direction} {threshold:.2%} versus {('SPY')} over the next {horizon_days} trading days."
     )
     hypothesis = Hypothesis(
-        id=uuid4(), ticker=ticker.upper(), security_id=UUID(security_id) if security_id else None,
-        created_at=datetime.now(UTC), information_cutoff=cutoff, as_of=as_of, provenance=provenance,
-        event_type=event_type, claim_text=claim, direction=direction, horizon_days=horizon_days,
-        predicted_probability=probability, threshold=threshold, base_rate=base_rate, sample_size=sample_size,
-        forecast_algo_version=forecast_algo_version, code_version=_code_version(),
-        evidence_ids=evidence_ids or [], memory_ids_used=memory_ids_used or [], supersedes_id=supersedes_id,
-        status_reason=resolve_after.reason, resolve_after=resolve_after.date, record_hash="pending",
-        relaxation_level=relaxation_level, base_rate_scope=base_rate_scope,
-        analogue_count=analogue_count, hash_version=hash_version,
+        id=uuid4(),
+        ticker=ticker.upper(),
+        security_id=UUID(security_id) if security_id else None,
+        created_at=datetime.now(UTC),
+        information_cutoff=cutoff,
+        as_of=as_of,
+        provenance=provenance,
+        event_type=event_type,
+        claim_text=claim,
+        direction=direction,
+        horizon_days=horizon_days,
+        predicted_probability=probability,
+        threshold=threshold,
+        base_rate=base_rate,
+        sample_size=sample_size,
+        forecast_algo_version=forecast_algo_version,
+        code_version=_code_version(),
+        evidence_ids=evidence_ids or [],
+        memory_ids_used=memory_ids_used or [],
+        supersedes_id=supersedes_id,
+        status_reason=resolve_after.reason,
+        resolve_after=resolve_after.date,
+        record_hash="pending",
+        relaxation_level=relaxation_level,
+        base_rate_scope=base_rate_scope,
+        analogue_count=analogue_count,
+        hash_version=hash_version,
     )
     hypothesis.record_hash = compute_record_hash(hypothesis)
     values = HypothesisWrite(
@@ -275,7 +289,9 @@ def verify_record(store: LedgerStore, hypothesis_id: UUID | str) -> bool:
     return compute_record_hash(hypothesis) == hypothesis.record_hash
 
 
-def mark_status(store: LedgerStore, hypothesis_id: UUID | str, status: HypothesisStatus, reason: str | None = None) -> None:
+def mark_status(
+    store: LedgerStore, hypothesis_id: UUID | str, status: HypothesisStatus, reason: str | None = None
+) -> None:
     current = get_hypothesis(store, hypothesis_id)
     valid = {"open": {"resolved", "censored", "invalidated"}, "censored": {"resolved", "invalidated"}}
     if status != current.status and status not in valid.get(current.status, set()):

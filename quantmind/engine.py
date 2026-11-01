@@ -6,8 +6,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import uuid4
 
+from .analogue_retrieval import AnalogueService
 from .analytics import AnalyticsResult, InstitutionalAnalytics
 from .confidence_engine import ConfidenceAudit, ConfidenceEngine
+from .current_event import detect_current_event
 from .llm import GroqResearcher
 from .memory import HindsightMemory, RecalledMemory, summarize_precedent
 from .models import (
@@ -19,7 +21,9 @@ from .models import (
     HistoricalPrecedent,
     LeadershipAssessment,
     MemoryUsed,
+    PrecedentMove,
     Report,
+    SourceCitation,
     SuccessRoadmap,
 )
 from .sources import LiveMarketSources, LiveResearchData
@@ -90,6 +94,9 @@ class QuantMindEngine:
             )
         )
         precedent = summarize_precedent(live.snapshot.asset, recalled.records, recalled.meta_insight)
+        structured_precedent = self._structured_precedent(live.snapshot.asset)
+        if structured_precedent is not None:
+            precedent = structured_precedent
 
         features = live.features
         observations: dict[str, float | None] = {
@@ -161,6 +168,43 @@ class QuantMindEngine:
                 report.historical_precedent.meta_insight = insight
 
         return ResearchResult(report=report, audit=audit)
+
+    @staticmethod
+    def _structured_precedent(asset: str) -> HistoricalPrecedent | None:
+        query = detect_current_event(asset.upper(), datetime.now(UTC))
+        if query is None:
+            return None
+        study = AnalogueService().study(query, cutoff=datetime.now(UTC))
+        if not study.matches:
+            return None
+        moves = [
+            PrecedentMove(
+                date=match.event.event_date.isoformat(),
+                price_change=match.event.day0_return or 0.0,
+                reason=match.event.event_type,
+                follow_through_5d=match.event.fwd_5d,
+                source=SourceCitation(
+                    source_type="sec_filing" if match.event.source_kind == "SEC EDGAR" else "price_data",
+                    source_url=match.event.source_url,
+                    headline=match.event.headline,
+                    date=match.event.event_date.isoformat(),
+                    available_at=match.event.available_at,
+                ),
+            )
+            for match in study.matches
+        ]
+        follow_through = [move.follow_through_5d for move in moves]
+        observed = [value for value in follow_through if value is not None]
+        return HistoricalPrecedent(
+            count=len(moves),
+            dates=[move.date for move in moves],
+            price_changes=[move.price_change for move in moves],
+            reasons=[move.reason for move in moves],
+            follow_through_5d=follow_through,
+            average_follow_through=sum(observed) / len(observed) if observed else None,
+            moves=moves,
+            narrative=f"{len(moves)} structured historical analogues matched from the local event corpus.",
+        )
 
     @staticmethod
     def _memory_text(report: Report) -> str:

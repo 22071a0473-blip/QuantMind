@@ -58,19 +58,21 @@ async def commit_ledger(request: Request, body: CommitRequest) -> Hypothesis:
     enforce_rate_limit(request)
     store = _store()
     try:
-        cutoff = (
-            datetime.fromisoformat(body.as_of).replace(tzinfo=UTC)
-            if body.as_of
-            else datetime.now(UTC)
-        )
+        cutoff = datetime.fromisoformat(body.as_of).replace(tzinfo=UTC) if body.as_of else datetime.now(UTC)
         draft = analogue_forecast(body.ticker, body.horizon_days, cutoff)
         if not draft.available or draft.probability is None:
             raise HTTPException(status_code=422, detail=draft.reason or "Not enough history to forecast responsibly.")
         return create_hypothesis(
-            store, ticker=body.ticker, information_cutoff=datetime.now(UTC),
-            provenance="live_forward", event_type=draft.event_type, direction=draft.direction,
-            horizon_days=body.horizon_days, predicted_probability=draft.probability,
-            base_rate=draft.base_rate, sample_size=draft.sample_size,
+            store,
+            ticker=body.ticker,
+            information_cutoff=datetime.now(UTC),
+            provenance="live_forward",
+            event_type=draft.event_type,
+            direction=draft.direction,
+            horizon_days=body.horizon_days,
+            predicted_probability=draft.probability,
+            base_rate=draft.base_rate,
+            sample_size=draft.sample_size,
             as_of=datetime.fromisoformat(body.as_of).date() if body.as_of else None,
             forecast_algo_version=draft.forecast_algo_version,
             relaxation_level=draft.relaxation_level,
@@ -114,28 +116,28 @@ async def ledger_stats(provenance: str = "live_forward") -> LedgerStatsResponse:
         counts = {row["status"]: int(row["count"]) for row in store.stats(provenance)}
         resolved_rows = store.resolved_metrics(provenance)
         n_resolved = len(resolved_rows)
-        response = LedgerStatsResponse(
-            insufficient_data=n_resolved < 20, n_resolved=n_resolved, counts=counts
-        )
+        response = LedgerStatsResponse(insufficient_data=n_resolved < 20, n_resolved=n_resolved, counts=counts)
         if n_resolved < 20:
             return response
         buckets: list[CalibrationBucket] = []
         for lower in (0.0, 0.2, 0.4, 0.6, 0.8):
             upper = lower + 0.2
             selected = [
-                row for row in resolved_rows
-                if lower <= row.predicted_probability < upper
-                or (upper == 1.0 and row.predicted_probability <= upper)
+                row
+                for row in resolved_rows
+                if lower <= row.predicted_probability < upper or (upper == 1.0 and row.predicted_probability <= upper)
             ]
-            buckets.append(CalibrationBucket(
-                lower=lower,
-                upper=upper,
-                n=len(selected),
-                mean_predicted=sum(row.predicted_probability for row in selected) / len(selected)
-                if selected else 0.0,
-                realized_frequency=sum(row.outcome for row in selected) / len(selected)
-                if selected else 0.0,
-            ))
+            buckets.append(
+                CalibrationBucket(
+                    lower=lower,
+                    upper=upper,
+                    n=len(selected),
+                    mean_predicted=sum(row.predicted_probability for row in selected) / len(selected)
+                    if selected
+                    else 0.0,
+                    realized_frequency=sum(row.outcome for row in selected) / len(selected) if selected else 0.0,
+                )
+            )
         response.mean_brier = sum(row.brier for row in resolved_rows) / n_resolved
         response.calibration = buckets
         return response

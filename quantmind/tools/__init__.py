@@ -3,4 +3,3 @@
 from .market import MarketToolResult
 
 __all__ = ["MarketToolResult"]
-

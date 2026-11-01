@@ -13,4 +13,3 @@ def test_missing_data_reduces_coverage_without_fake_score() -> None:
     assert report.coverage == 2 / 50
     assert report.available == 2
     assert "volatility" in report.missing
-

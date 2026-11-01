@@ -14,4 +14,3 @@ def summarize_news(headline_count: int | None) -> NewsToolResult:
     if headline_count is None:
         return NewsToolResult("unavailable", "news", reason="news provider did not return data")
     return NewsToolResult("available", "news", headline_count=max(0, headline_count))
-

@@ -25,4 +25,3 @@ if __name__ == "__main__":
     parser.add_argument("--query", default="historical market precedent")
     args = parser.parse_args()
     asyncio.run(main(args.asset, args.query))
-

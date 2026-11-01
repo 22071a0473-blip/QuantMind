@@ -12,4 +12,3 @@ class FilingsToolResult(ToolResult):
 
 def filings_unavailable() -> FilingsToolResult:
     return FilingsToolResult("unavailable", "filings", reason="SEC filing payload was not supplied")
-

@@ -22,10 +22,7 @@ def detect_current_event(ticker: str, cutoff: datetime) -> EventQuery | None:
     ledger_store = LedgerStore(database)
     try:
         try:
-            bars = [
-                bar for bar in ledger_store.market_bars(ticker.upper())
-                if bar.observed_at <= effective_cutoff
-            ]
+            bars = [bar for bar in ledger_store.market_bars(ticker.upper()) if bar.observed_at <= effective_cutoff]
         except sqlite3.OperationalError as exc:
             if "no such table" in str(exc):
                 return None
@@ -33,7 +30,8 @@ def detect_current_event(ticker: str, cutoff: datetime) -> EventQuery | None:
         trading_dates = sorted({bar.observed_at.date() for bar in bars})
         recent_dates = set(trading_dates[-3:])
         recent_events = [
-            event for event in event_store.list_events(ticker=ticker, limit=500)
+            event
+            for event in event_store.list_events(ticker=ticker, limit=500)
             if event.event_date in recent_dates
             and event.event_date < effective_cutoff.date()
             and event.available_at < effective_cutoff
@@ -69,9 +67,7 @@ def _price_only_event(ticker: str, cutoff: datetime, bars: list[object]) -> Even
     benchmark_store = LedgerStore(Path(os.getenv("QUANTMIND_DATABASE", "data/quantmind.db")))
     try:
         benchmark = {
-            bar.observed_at.date(): bar
-            for bar in benchmark_store.market_bars("SPY")
-            if bar.observed_at <= cutoff
+            bar.observed_at.date(): bar for bar in benchmark_store.market_bars("SPY") if bar.observed_at <= cutoff
         }
     finally:
         benchmark_store.close()

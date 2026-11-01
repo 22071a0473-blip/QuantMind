@@ -19,6 +19,7 @@ class AnalogueStudy(BaseModel):
     statistics: dict[str, AnalogueStatistics] = Field(default_factory=dict)
     relaxation_level: str
     semantic_status: str = "not_requested"
+    semantic_reason: str | None = None
     insufficient_analogues: bool = False
 
 
@@ -81,6 +82,7 @@ class AnalogueService:
             store.close()
         semantic_events: list[MarketEvent] = []
         semantic_status = "unavailable"
+        semantic_reason: str | None = None
         try:
             hits = await QuantMindEventMemory().search(
                 f"{query.ticker} {query.event_type} {query.sector or ''}",
@@ -95,9 +97,14 @@ class AnalogueService:
                 if event is not None:
                     semantic_events.append(event)
         except KeyError:
-            pass
-        except Exception:
-            pass
+            semantic_reason = "Hindsight credentials are not configured."
+        except Exception as exc:
+            status_code = getattr(exc, "status_code", None) or getattr(exc, "status", None)
+            if status_code in (401, 403):
+                semantic_status = "unauthorized"
+                semantic_reason = "Hindsight rejected the configured credentials."
+            else:
+                semantic_reason = "Hindsight semantic retrieval is unavailable."
         retrieval = retrieve_analogues(query, corpus, effective_cutoff, semantic_events=semantic_events)
         statistics = {
             horizon: compute_statistics(
@@ -122,8 +129,10 @@ class AnalogueService:
             statistics=statistics,
             relaxation_level=retrieval.relaxation_level,
             semantic_status=semantic_status,
+            semantic_reason=semantic_reason,
             insufficient_analogues=retrieval.insufficient_analogues,
         )
+
     def latest_event(self, ticker: str, now: datetime | None = None) -> MarketEvent | None:
         effective_now = now or datetime.now(UTC)
         store = EventStore(self._database)

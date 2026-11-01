@@ -141,11 +141,7 @@ def compute_feature_at(
         values[key] = current / statistics.mean(window_prices) - 1 if len(window_prices) == window else None
         if values[key] is None:
             missing.append(key)
-    values["gap_return"] = (
-        prefix[-1].open / prefix[-2].close - 1
-        if len(prefix) >= 2 and prefix[-2].close > 0
-        else None
-    )
+    values["gap_return"] = prefix[-1].open / prefix[-2].close - 1 if len(prefix) >= 2 and prefix[-2].close > 0 else None
     values["realized_range"] = (prefix[-1].high - prefix[-1].low) / current if current > 0 else None
     values["volume_zscore_60"] = _z_score(volumes, 60)
     values["volume_change"] = (
@@ -172,7 +168,8 @@ def eligible_market_bars(
 ) -> list[MarketBarRecord]:
     normalized_cutoff = ensure_utc(cutoff)
     return [
-        bar for bar in sorted(bars, key=lambda item: ensure_utc(item.observed_at))
+        bar
+        for bar in sorted(bars, key=lambda item: ensure_utc(item.observed_at))
         if ensure_utc(bar.available_at) <= normalized_cutoff
     ]
 
@@ -186,17 +183,12 @@ def compute_features(
     return [
         compute_feature_at(ordered, index)
         for index, bar in enumerate(ordered)
-        if (start is None or bar.observed_at.date() >= start)
-        and (end is None or bar.observed_at.date() <= end)
+        if (start is None or bar.observed_at.date() >= start) and (end is None or bar.observed_at.date() <= end)
     ]
 
 
 def _feature_vector(feature: HistoricalFeature) -> dict[str, float]:
-    return {
-        key: value
-        for key, value in feature.values.items()
-        if value is not None and math.isfinite(value)
-    }
+    return {key: value for key, value in feature.values.items() if value is not None and math.isfinite(value)}
 
 
 def _distance(target: HistoricalFeature, candidate: HistoricalFeature) -> tuple[float, list[str], list[str]]:
@@ -205,14 +197,8 @@ def _distance(target: HistoricalFeature, candidate: HistoricalFeature) -> tuple[
     shared = sorted(set(target_values) & set(candidate_values))
     if not shared:
         return math.inf, [], sorted(set(target_values) ^ set(candidate_values))
-    distances = [
-        (target_values[name] - candidate_values[name]) ** 2
-        for name in shared
-    ]
-    differences = [
-        name for name in sorted(set(target_values) | set(candidate_values))
-        if name not in shared
-    ]
+    distances = [(target_values[name] - candidate_values[name]) ** 2 for name in shared]
+    differences = [name for name in sorted(set(target_values) | set(candidate_values)) if name not in shared]
     return math.sqrt(sum(distances) / len(distances)), shared, differences
 
 
@@ -222,9 +208,7 @@ def forward_returns(bars: Sequence[MarketBarRecord], index: int) -> dict[str, fl
     base = prices[index]
     return {
         f"return_{horizon}": (
-            prices[index + horizon] / base - 1
-            if base > 0 and index + horizon < len(prices)
-            else None
+            prices[index + horizon] / base - 1 if base > 0 and index + horizon < len(prices) else None
         )
         for horizon in HORIZONS
     }
@@ -240,10 +224,7 @@ def search_analogues(
 ) -> AnalogueQuery:
     target_all_bars = sorted(target_bars, key=lambda bar: ensure_utc(bar.observed_at))
     target_ordered = eligible_market_bars(target_all_bars, cutoff)
-    target_indexes = [
-        index for index, bar in enumerate(target_ordered)
-        if bar.observed_at.date() == target_date
-    ]
+    target_indexes = [index for index, bar in enumerate(target_ordered) if bar.observed_at.date() == target_date]
     if not target_indexes:
         raise ValueError(f"No target bar exists for {target_date.isoformat()}.")
     target_index = target_indexes[-1]
@@ -259,7 +240,8 @@ def search_analogues(
             if bar.security_id == target_feature.security_id and bar.observed_at == target_feature.observed_at:
                 continue
             eligible_index = next(
-                position for position, eligible_bar in enumerate(eligible)
+                position
+                for position, eligible_bar in enumerate(eligible)
                 if eligible_bar.observed_at == bar.observed_at
             )
             candidate = compute_feature_at(eligible, eligible_index)
@@ -283,9 +265,7 @@ def search_analogues(
     matches.sort(key=lambda match: (-match.similarity, match.observed_at))
     selected = matches[:limit]
     returns = [
-        match.forward_returns["return_20"]
-        for match in selected
-        if match.forward_returns["return_20"] is not None
+        match.forward_returns["return_20"] for match in selected if match.forward_returns["return_20"] is not None
     ]
     summary: dict[str, float | int | None] = {
         "sample_size": len(selected),
@@ -353,9 +333,7 @@ def walk_forward_evaluate(
         "mae": statistics.mean(abs(error) for error in errors) if errors else None,
         "rmse": math.sqrt(statistics.mean(error**2 for error in errors)) if errors else None,
         "directional_accuracy": sum(directional) / len(directional) if directional else None,
-        "mean_realized_return": statistics.mean(point.realized_return for point in resolved)
-        if resolved
-        else None,
+        "mean_realized_return": statistics.mean(point.realized_return for point in resolved) if resolved else None,
     }
     return EvaluationRun(
         security_id=ordered[0].security_id if ordered else uuid4(),

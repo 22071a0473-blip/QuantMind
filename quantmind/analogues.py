@@ -112,14 +112,31 @@ def feature_scores(query: EventQuery, event: MarketEvent, corpus: Sequence[Marke
         "market_cap_bucket": market_cap_score,
     }
     query_regime = (
-        _tercile(query.regime_spy_ret_60d, [item.regime_spy_ret_60d for item in corpus if item.regime_spy_ret_60d is not None]),
-        _tercile(query.regime_spy_vol_60d, [item.regime_spy_vol_60d for item in corpus if item.regime_spy_vol_60d is not None]),
+        _tercile(
+            query.regime_spy_ret_60d,
+            [item.regime_spy_ret_60d for item in corpus if item.regime_spy_ret_60d is not None],
+        ),
+        _tercile(
+            query.regime_spy_vol_60d,
+            [item.regime_spy_vol_60d for item in corpus if item.regime_spy_vol_60d is not None],
+        ),
     )
     event_regime = (
-        _tercile(event.regime_spy_ret_60d, [item.regime_spy_ret_60d for item in corpus if item.regime_spy_ret_60d is not None]),
-        _tercile(event.regime_spy_vol_60d, [item.regime_spy_vol_60d for item in corpus if item.regime_spy_vol_60d is not None]),
+        _tercile(
+            event.regime_spy_ret_60d,
+            [item.regime_spy_ret_60d for item in corpus if item.regime_spy_ret_60d is not None],
+        ),
+        _tercile(
+            event.regime_spy_vol_60d,
+            [item.regime_spy_vol_60d for item in corpus if item.regime_spy_vol_60d is not None],
+        ),
     )
-    if query_regime[0] is not None and query_regime[1] is not None and event_regime[0] is not None and event_regime[1] is not None:
+    if (
+        query_regime[0] is not None
+        and query_regime[1] is not None
+        and event_regime[0] is not None
+        and event_regime[1] is not None
+    ):
         scores["regime"] = (
             1.0
             if query_regime == event_regime
@@ -140,11 +157,7 @@ def similarity(query: EventQuery, event: MarketEvent, corpus: Sequence[MarketEve
 
 
 def _eligible(query: EventQuery, event: MarketEvent, cutoff: datetime) -> bool:
-    return (
-        event.event_id != query.event_id
-        and event.event_date < cutoff.date()
-        and event.available_at < cutoff
-    )
+    return event.event_id != query.event_id and event.event_date < cutoff.date() and event.available_at < cutoff
 
 
 def retrieve_analogues(

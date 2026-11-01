@@ -12,4 +12,3 @@ class SectorToolResult(ToolResult):
 
 def sector_unavailable() -> SectorToolResult:
     return SectorToolResult("unavailable", "sector", reason="no verified sector classification supplied")
-

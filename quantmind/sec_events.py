@@ -48,7 +48,10 @@ def fetch_8k_events(ticker: str, cik: str, user_agent: str | None = None) -> lis
         pages.append(_get_json(f"https://data.sec.gov/submissions/{name}", agent))
     time.sleep(0.2)
     events = parse_8k_pages(ticker, cik, pages)
-    return sorted({(event.event_date, event.item_code, event.filing_url): event for event in events}.values(), key=lambda event: event.event_date)
+    return sorted(
+        {(event.event_date, event.item_code, event.filing_url): event for event in events}.values(),
+        key=lambda event: event.event_date,
+    )
 
 
 def parse_8k_submissions(ticker: str, cik: str, payload: dict[str, object]) -> list[FilingEvent]:
@@ -75,9 +78,7 @@ def parse_8k_submissions(ticker: str, cik: str, payload: dict[str, object]) -> l
                 word in title_lower for word in ("merger", "acquisition", "acquire", "business combination")
             ):
                 event_type = "merger_acquisition"
-            elif code == "1.01" and any(
-                word in title_lower for word in ("partner", "alliance", "collaboration")
-            ):
+            elif code == "1.01" and any(word in title_lower for word in ("partner", "alliance", "collaboration")):
                 event_type = "major_partnership_deal"
             accession = str(accessions[index]).replace("-", "")
             accepted = str(acceptance_times[index]) if index < len(acceptance_times) else ""
@@ -86,15 +87,17 @@ def parse_8k_submissions(ticker: str, cik: str, payload: dict[str, object]) -> l
                 if accepted
                 else datetime.combine(date.fromisoformat(str(dates[index])), datetime.min.time(), tzinfo=UTC)
             )
-            results.append(FilingEvent(
-                ticker=ticker,
-                event_date=date.fromisoformat(str(dates[index])),
-                event_type=event_type,
-                item_code=code,
-                headline=headline,
-                filing_url=f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{accession}/{primary_document}",
-                available_at=available_at,
-            ))
+            results.append(
+                FilingEvent(
+                    ticker=ticker,
+                    event_date=date.fromisoformat(str(dates[index])),
+                    event_type=event_type,
+                    item_code=code,
+                    headline=headline,
+                    filing_url=f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{accession}/{primary_document}",
+                    available_at=available_at,
+                )
+            )
     return results
 
 

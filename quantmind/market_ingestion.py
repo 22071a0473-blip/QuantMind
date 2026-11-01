@@ -146,7 +146,11 @@ def validate_market_rows(
                 )
             )
             continue
-        if min(row.open, row.high, row.low, row.close) <= 0 or row.high < max(row.open, row.close) or row.low > min(row.open, row.close):
+        if (
+            min(row.open, row.high, row.low, row.close) <= 0
+            or row.high < max(row.open, row.close)
+            or row.low > min(row.open, row.close)
+        ):
             issues.append(
                 DataQualityIssueRecord(
                     entity_type="security",
@@ -200,7 +204,9 @@ class MarketIngestionResult:
     stored_bars: int
 
 
-def checkpoint_for(result: MarketIngestionResult, ticker: str, security_id: UUID, provider: str) -> MarketCheckpoint | None:
+def checkpoint_for(
+    result: MarketIngestionResult, ticker: str, security_id: UUID, provider: str
+) -> MarketCheckpoint | None:
     if not result.quality.accepted:
         return None
     return MarketCheckpoint(
